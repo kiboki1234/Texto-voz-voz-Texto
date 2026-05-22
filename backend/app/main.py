@@ -1,3 +1,6 @@
+import asyncio
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -6,9 +9,15 @@ from app.core.config import settings
 from app.db.client import DatabaseClient
 from app.db.repository import AgroRepository
 from app.modules.analytics.routes import router as analytics_router
+from app.modules.alerts.rules import AlertEngine
 from app.modules.alerts.routes import router as alerts_router
 from app.modules.exports.routes import router as exports_router
 from app.modules.stations.routes import router as stations_router
+from app.modules.telegram.routes import router as telegram_router
+from app.modules.telegram.service import TelegramNotifier, format_gad_alert_message
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app() -> FastAPI:
@@ -53,7 +62,47 @@ def create_app() -> FastAPI:
     app.include_router(alerts_router, prefix="/api")
     app.include_router(analytics_router, prefix="/api")
     app.include_router(exports_router, prefix="/api")
+    app.include_router(telegram_router, prefix="/api")
+
+    @app.on_event("startup")
+    async def start_telegram_notifications() -> None:
+        if not settings.telegram_notifications_enabled:
+            return
+        notifier = TelegramNotifier(settings)
+        if not notifier.is_configured or not notifier.has_default_chat:
+            logger.warning("Telegram notifications enabled but token or chat_id is missing.")
+            return
+        app.state.telegram_task = asyncio.create_task(_telegram_alert_loop(app))
+
+    @app.on_event("shutdown")
+    async def stop_telegram_notifications() -> None:
+        task = getattr(app.state, "telegram_task", None)
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
     return app
 
 
 app = create_app()
+
+
+async def _telegram_alert_loop(app: FastAPI) -> None:
+    while True:
+        try:
+            await asyncio.to_thread(_send_current_alert_report, app)
+        except Exception:
+            logger.exception("Telegram notification cycle failed.")
+        await asyncio.sleep(max(60, settings.telegram_alert_interval_seconds))
+
+
+def _send_current_alert_report(app: FastAPI) -> None:
+    engine = AlertEngine()
+    alerts = []
+    for summary in app.state.repository.get_summaries():
+        alerts.extend(alert.as_dict() for alert in engine.evaluate(summary))
+    TelegramNotifier(settings).send_message(format_gad_alert_message(alerts))

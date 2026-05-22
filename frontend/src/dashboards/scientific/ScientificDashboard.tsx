@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import { useEto, useFrost, useLatest, useNpk, useOmbrothermal, useSeries, useStations, useVariables, useWindRose } from '../../api/hooks';
 import { ChartPanel } from '../../components/ChartPanel';
 import { DateRangePicker } from '../../components/DateRangePicker';
+import { HuacaWarningModal } from '../../components/HuacaWarningModal';
 import { LoadingState } from '../../components/LoadingState';
 import { MetricCard } from '../../components/MetricCard';
 import { NpkStatus } from '../../components/NpkStatus';
@@ -15,34 +16,36 @@ import { formatDateTime, formatNumber } from '../../lib/format';
 export function ScientificDashboard() {
   const [stationId, setStationId] = useState(102);
   const [variable, setVariable] = useState('Temp_AVG');
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-19');
-  const [resolution, setResolution] = useState('daily');
+  const [from, setFrom] = useState(() => daysAgoInputValue(21));
+  const [to, setTo] = useState(() => dateInputValue(new Date()));
+  const resolution = 'daily';
 
   const { data: stations = [] } = useStations();
   const { data: variables = [] } = useVariables();
   const { data: latest, isLoading: latestLoading } = useLatest(stationId);
   const { data: series, isLoading: seriesLoading } = useSeries(stationId, variable, from, to, resolution);
   const { data: npk } = useNpk(stationId);
-  const { data: ombro } = useOmbrothermal(stationId, 2026);
+  const { data: ombro } = useOmbrothermal(stationId, from, to);
   const { data: eto } = useEto(stationId, from, to);
   const { data: frost } = useFrost(stationId, from, to);
   const { data: windRose } = useWindRose(stationId, from, to);
 
   const selectedStation = stations.find((station) => station.station_id === stationId);
   const latestMap = Object.fromEntries((latest?.variables ?? []).map((item) => [item.standard_name, item]));
+  const seriesLabels = series?.points.map((point) => formatSeriesLabel(point.time, resolution)) ?? [];
 
   return (
     <div className="space-y-6">
+      <HuacaWarningModal active={stationId === 101} context="cientifico" />
       <section className="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 shadow-panel lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-bold uppercase text-water">Dashboard cientifico</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal">Exploracion agrometeorologica</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Variables normalizadas desde YDOC Insights. HUACA conserva advertencias por nomenclatura y unidad NPK.
+            Variables normalizadas desde YDOC Insights. HUACA conserva advertencias porque sus nutrientes usan unidades distintas.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <StationSelector stations={stations} value={stationId} onChange={setStationId} />
           <label>
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Variable</span>
@@ -54,21 +57,14 @@ export function ScientificDashboard() {
               ))}
             </select>
           </label>
-          <label>
-            <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Resolucion</span>
-            <select className="focus-ring w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" value={resolution} onChange={(event) => setResolution(event.target.value)}>
-              <option value="raw">Raw</option>
-              <option value="hourly">Horaria</option>
-              <option value="daily">Diaria</option>
-            </select>
-          </label>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard title="Temperatura" value={formatNumber(latestMap.Temp_AVG?.value)} unit="C" icon={<Thermometer size={20} />} tone="blue" caption="Promedio actual" />
         <MetricCard title="Humedad" value={formatNumber(latestMap.Humedad_AVG?.value)} unit="%" icon={<Droplets size={20} />} tone="green" caption="Humedad relativa" />
         <MetricCard title="Lluvia" value={formatNumber(latestMap.Lluvia?.value)} unit="mm" icon={<Gauge size={20} />} tone="neutral" caption="Lectura reciente" />
+        <MetricCard title="Radiacion" value={formatNumber(latestMap.RadSol_AVG?.value, 0)} unit="W/m2" icon={<Sun size={20} />} tone="amber" caption="Radiacion solar promedio" />
         <MetricCard title="Bateria" value={formatNumber(latestMap.Bateria?.value, 2)} unit="V" icon={<Zap size={20} />} tone={(latestMap.Bateria?.value ?? 4) < 3.7 ? 'red' : 'amber'} caption={selectedStation ? formatDateTime(selectedStation.latest_time) : ''} />
       </section>
 
@@ -114,7 +110,7 @@ export function ScientificDashboard() {
                 tooltip: { trigger: 'axis' },
                 grid: { left: 48, right: 24, top: 28, bottom: 70 },
                 dataZoom: [{ type: 'inside' }, { type: 'slider', height: 24 }],
-                xAxis: { type: 'category', data: series?.points.map((point) => point.time.slice(0, 10)) ?? [] },
+                xAxis: { type: 'category', data: seriesLabels },
                 yAxis: { type: 'value', name: series?.unit },
                 series: [{ type: 'line', smooth: true, symbol: 'none', lineStyle: { color: '#137ea0', width: 2 }, areaStyle: { color: 'rgba(19, 126, 160, 0.12)' }, data: series?.points.map((point) => point.value) ?? [] }],
               }}
@@ -124,7 +120,7 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Ombrotermico Gaussen" subtitle="Periodo seco si P <= 2T">
+        <ChartPanel title="Diagrama Ombrotermico (P vs 2T)" subtitle={`${from} a ${to} · Precipitacion mensual P vs temperatura duplicada 2T`}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -132,16 +128,64 @@ export function ScientificDashboard() {
               legend: { bottom: 0 },
               grid: { left: 44, right: 20, top: 24, bottom: 48 },
               xAxis: { type: 'category', data: ombro?.months.map((month) => month.month) ?? [] },
-              yAxis: [{ type: 'value', name: 'T C' }, { type: 'value', name: 'P mm' }],
+              yAxis: { type: 'value', name: 'P mm / 2xTemp C' },
               series: [
-                { name: 'Temperatura', type: 'line', data: ombro?.months.map((month) => month.temperature_avg) ?? [], yAxisIndex: 0, color: '#c98320' },
-                { name: 'Precipitacion', type: 'bar', data: ombro?.months.map((month) => month.precipitation) ?? [], yAxisIndex: 1, color: '#137ea0' },
+                {
+                  name: 'Precipitacion',
+                  type: 'line',
+                  smooth: false,
+                  symbol: 'circle',
+                  symbolSize: 7,
+                  color: '#4f8df7',
+                  data: ombro?.months.map((month) => ({
+                    value: month.precipitation,
+                    itemStyle: { color: month.dry ? '#c98320' : '#4f8df7' },
+                  })) ?? [],
+                },
+                {
+                  name: 'Temperatura (2T)',
+                  type: 'line',
+                  smooth: false,
+                  symbol: 'circle',
+                  symbolSize: 7,
+                  color: '#85dc8b',
+                  data: ombro?.months.map((month) => ({
+                    value: month.temperature_2x,
+                    itemStyle: { color: '#85dc8b' },
+                  })) ?? [],
+                },
               ],
             }}
           />
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">Mes</th>
+                  <th>T media</th>
+                  <th>2T</th>
+                  <th>P real</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ombro?.months.map((month) => (
+                  <tr key={month.month} className="border-b border-slate-100">
+                    <td className="py-2 font-semibold">{month.month}</td>
+                    <td>{formatNumber(month.temperature_avg)} C</td>
+                    <td>{formatNumber(month.temperature_2x)}</td>
+                    <td>{formatNumber(month.precipitation)} mm</td>
+                    <td className={month.data_status === 'missing' ? 'text-slate-500' : month.dry ? 'text-amber-700' : 'text-emerald-700'}>
+                      {month.data_status === 'missing' ? 'sin datos' : month.dry ? 'seco' : 'humedo'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ChartPanel>
 
-        <ChartPanel title="ET0 y lluvia" subtitle={eto?.method}>
+        <ChartPanel title="ET0, lluvia y deficit hídrico" subtitle={eto?.method}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -149,10 +193,11 @@ export function ScientificDashboard() {
               legend: { bottom: 0 },
               grid: { left: 44, right: 20, top: 24, bottom: 48 },
               xAxis: { type: 'category', data: eto?.points.map((point) => point.date.slice(5)) ?? [] },
-              yAxis: [{ type: 'value', name: 'ET0' }, { type: 'value', name: 'mm' }],
+              yAxis: { type: 'value', name: 'mm/dia' },
               series: [
                 { name: 'ET0', type: 'line', data: eto?.points.map((point) => point.eto) ?? [], color: '#1f7a5c' },
-                { name: 'Lluvia', type: 'bar', data: eto?.points.map((point) => point.rainfall) ?? [], yAxisIndex: 1, color: '#137ea0' },
+                { name: 'Lluvia', type: 'bar', data: eto?.points.map((point) => point.rainfall) ?? [], color: '#137ea0' },
+                { name: 'Deficit Hídrico', type: 'line', data: eto?.points.map((point) => point.deficit) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbol: 'none' },
               ],
             }}
           />
@@ -160,35 +205,94 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Heladas y punto de rocio" subtitle="Temp_Min + Humedad_AVG, clasificacion blanca/negra">
+        <ChartPanel title="Probabilidad de helada" subtitle="Ecuaciones con Temp_Min y Temp_AVG: e, e_s, HR estimada y probabilidad">
           <ReactECharts
-            style={{ height: 300 }}
+            style={{ height: 380 }}
             option={{
               tooltip: { trigger: 'axis' },
-              legend: { bottom: 0 },
-              grid: { left: 44, right: 20, top: 24, bottom: 48 },
-              xAxis: { type: 'category', data: frost?.events.map((event) => event.date.slice(5)) ?? [] },
-              yAxis: { type: 'value', name: 'C' },
+              legend: {
+                type: 'scroll',
+                top: 0,
+                left: 8,
+                right: 8,
+                itemGap: 12,
+                textStyle: { fontSize: 11 },
+              },
+              grid: { left: 48, right: 54, top: 88, bottom: 78 },
+              xAxis: {
+                type: 'category',
+                data: frost?.events.map((event) => event.date.slice(5)) ?? [],
+                axisLabel: {
+                  interval: 'auto',
+                  rotate: 35,
+                  hideOverlap: true,
+                  margin: 14,
+                  fontSize: 11,
+                },
+              },
+              yAxis: [
+                { type: 'value', name: 'C', nameGap: 26 },
+                { type: 'value', name: 'HR / Prob %', min: 0, max: 100, nameGap: 30 },
+              ],
               series: [
-                { name: 'Temp_Min', type: 'line', data: frost?.events.map((event) => event.temp_min) ?? [], color: '#b42318' },
-                { name: 'Punto rocio', type: 'line', data: frost?.events.map((event) => event.dew_point) ?? [], color: '#137ea0' },
-                { name: 'Umbral 2C', type: 'line', data: frost?.events.map(() => 2) ?? [], color: '#c98320', lineStyle: { type: 'dashed' }, symbol: 'none' },
+                { name: 'Temp_Min', type: 'line', data: frost?.events.map((event) => event.temp_min) ?? [], color: '#b42318', symbolSize: 6 },
+                { name: 'Temp_AVG', type: 'line', data: frost?.events.map((event) => event.temp_avg) ?? [], color: '#64748b', symbolSize: 5 },
+                { name: 'HR estimada', type: 'line', yAxisIndex: 1, data: frost?.events.map((event) => event.estimated_humidity) ?? [], color: '#7c3aed', symbolSize: 6 },
+                { name: 'Probabilidad helada', type: 'line', yAxisIndex: 1, data: frost?.events.map((event) => event.frost_probability) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbolSize: 6 },
+                { name: 'Umbral helada 0C', type: 'line', data: frost?.events.map(() => 0) ?? [], color: '#b42318', lineStyle: { type: 'dotted' }, symbol: 'none' },
+                { name: 'Umbral HR 70%', type: 'line', yAxisIndex: 1, data: frost?.events.map(() => 70) ?? [], color: '#7c3aed', lineStyle: { type: 'dotted' }, symbol: 'none' },
               ],
             }}
           />
+          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <p className="font-semibold">Metodologia aplicada</p>
+            <p className="mt-1">e con Temp_Min; e_s con Temp_AVG; HR estimada=(e/e_s)*100. Probabilidad = factor temperatura * (0.70 + 0.30 * factor humedad) * 100. Si Temp_Min ≤ 0 C: blanca con HR ≥ 70%, negra con HR &lt; 70%.</p>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">Fecha</th>
+                  <th>Temp_Min</th>
+                  <th>Temp_AVG</th>
+                  <th>e</th>
+                  <th>e_s</th>
+                  <th>HR estimada</th>
+                  <th>Probabilidad</th>
+                  <th>Clasificacion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {frost?.events.map((event) => (
+                  <tr key={event.date} className="border-b border-slate-100">
+                    <td className="py-2 font-semibold">{event.date}</td>
+                    <td>{formatNumber(event.temp_min)} C</td>
+                    <td>{formatNumber(event.temp_avg)} C</td>
+                    <td>{formatNumber(event.actual_vapor_pressure, 3)} hPa</td>
+                    <td>{formatNumber(event.saturation_vapor_pressure, 3)} hPa</td>
+                    <td>{formatNumber(event.estimated_humidity)}%</td>
+                    <td className={(event.frost_probability ?? 0) >= 50 ? 'font-bold text-amber-700' : 'text-emerald-700'}>{formatNumber(event.frost_probability)}%</td>
+                    <td className={event.risk === 'critical' ? 'font-bold text-red-700' : event.risk === 'watch' ? 'font-bold text-amber-700' : 'text-emerald-700'}>{event.type ? `Helada ${event.type}` : event.risk === 'watch' ? 'Vigilancia' : 'Sin helada'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {frost?.events.filter((event) => event.risk !== 'normal').slice(0, 3).map((event) => (
               <div key={event.date} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <p className="font-bold">{event.date}</p>
                 <p>{event.message}</p>
+                <p className="mt-1 text-xs">Probabilidad: {formatNumber(event.frost_probability)}%</p>
+                <p className="mt-1 text-xs">HR estimada: {formatNumber(event.estimated_humidity)}%</p>
               </div>
             ))}
           </div>
         </ChartPanel>
-        <ChartPanel title="NPK suelo" subtitle="Bandas: deficiente, optimo, exceso">
+        <ChartPanel title="Estado Nutricional NPK del Suelo" subtitle="Nitrógeno, fósforo y potasio comparados contra rangos óptimos en mg/Kg">
           <NpkStatus data={npk} />
         </ChartPanel>
-        <ChartPanel title="Rosa de vientos" subtitle="DV_Sonic_AVG + VV_Sonic_AVG">
+        <ChartPanel title="Rosa de vientos" subtitle={windRose?.method ?? 'Direccion por muestra, velocidad media por sector'}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -203,7 +307,7 @@ export function ScientificDashboard() {
       </section>
 
       {latestLoading ? <LoadingState /> : (
-        <ChartPanel title="Ultimas lecturas normalizadas" subtitle="Contrato backend sobre recentvalues">
+        <ChartPanel title="Ultimas lecturas normalizadas" subtitle="Contrato backend sobre measurements">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
@@ -234,4 +338,20 @@ export function ScientificDashboard() {
       )}
     </div>
   );
+}
+
+function dateInputValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function daysAgoInputValue(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return dateInputValue(date);
+}
+
+function formatSeriesLabel(time: string, resolution: string) {
+  if (resolution === 'daily') return time.slice(0, 10);
+  return time.replace('T', ' ').slice(0, 16);
 }

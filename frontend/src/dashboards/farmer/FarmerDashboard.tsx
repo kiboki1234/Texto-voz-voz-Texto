@@ -2,6 +2,7 @@ import { AlertTriangle, Battery, CheckCircle, ChevronDown, ChevronUp, CloudRain,
 import { useState } from 'react';
 import { useNpk, useStations, useSummary } from '../../api/hooks';
 import { MetricCard } from '../../components/MetricCard';
+import { HuacaWarningModal } from '../../components/HuacaWarningModal';
 import { NpkStatus } from '../../components/NpkStatus';
 import { StationSelector } from '../../components/StationSelector';
 import { formatNumber } from '../../lib/format';
@@ -322,6 +323,7 @@ export function FarmerDashboard() {
   const { data: summary } = useSummary(stationId);
   const { data: npk } = useNpk(stationId);
 
+
   const warnings = summary?.warnings ? humanizeWarnings(summary.warnings) : [];
   const batteryMsg = humanBatteryMessage(summary?.battery_voltage);
 
@@ -334,6 +336,7 @@ export function FarmerDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8">
+      <HuacaWarningModal active={stationId === 101} context="agricultor" />
       <StationSelector stations={stations} value={stationId} onChange={setStationId} compact />
 
       <FrostAlertWidget summary={summary} />
@@ -379,3 +382,4 @@ export function FarmerDashboard() {
     </div>
   );
 }
+

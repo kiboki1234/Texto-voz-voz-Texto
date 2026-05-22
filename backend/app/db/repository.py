@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any
 
 from app.db.client import DatabaseClient
@@ -133,10 +133,9 @@ class AgroRepository:
         definition = self.normalizer.get_definition(variable)
         if definition is None:
             raise ValueError(f"Variable no soportada: {variable}.")
-        if to_date <= from_date:
-            raise ValueError("El parametro to debe ser mayor que from.")
         if resolution not in {"raw", "hourly", "daily"}:
             raise ValueError("resolution debe ser raw, hourly o daily.")
+        from_bound, to_bound = _query_bounds(from_date, to_date)
 
         tag_ids = self._tag_ids_for_standard(station_id, definition.standard_name)
         if not tag_ids:
@@ -150,7 +149,7 @@ class AgroRepository:
             }
 
         placeholders = ",".join("?" for _ in tag_ids)
-        params: list[Any] = [*tag_ids, from_date, to_date]
+        params: list[Any] = [*tag_ids, from_bound, to_bound]
         if resolution == "raw":
             sql = f"""
                 SELECT
@@ -159,23 +158,24 @@ class AgroRepository:
                 FROM dbo.measurements m
                 WHERE m.TAGID IN ({placeholders})
                   AND m.TIMEOFMEASUREMENT >= ?
-                  AND m.TIMEOFMEASUREMENT <= ?
+                  AND m.TIMEOFMEASUREMENT < ?
                 ORDER BY m.TIMEOFMEASUREMENT
             """
         elif resolution == "hourly":
+            aggregate = _bucket_aggregate(definition.standard_name)
             sql = f"""
                 SELECT
                     DATEADD(HOUR, DATEDIFF(HOUR, 0, m.TIMEOFMEASUREMENT), 0) AS measured_at,
-                    AVG(m.MEASUREDVALUE) AS value
+                    {aggregate}(m.MEASUREDVALUE) AS value
                 FROM dbo.measurements m
                 WHERE m.TAGID IN ({placeholders})
                   AND m.TIMEOFMEASUREMENT >= ?
-                  AND m.TIMEOFMEASUREMENT <= ?
+                  AND m.TIMEOFMEASUREMENT < ?
                 GROUP BY DATEADD(HOUR, DATEDIFF(HOUR, 0, m.TIMEOFMEASUREMENT), 0)
                 ORDER BY measured_at
             """
         else:
-            aggregate = "SUM" if definition.standard_name == "Lluvia" else "AVG"
+            aggregate = _bucket_aggregate(definition.standard_name)
             sql = f"""
                 SELECT
                     CAST(m.TIMEOFMEASUREMENT AS date) AS measured_at,
@@ -183,7 +183,7 @@ class AgroRepository:
                 FROM dbo.measurements m
                 WHERE m.TAGID IN ({placeholders})
                   AND m.TIMEOFMEASUREMENT >= ?
-                  AND m.TIMEOFMEASUREMENT <= ?
+                  AND m.TIMEOFMEASUREMENT < ?
                 GROUP BY CAST(m.TIMEOFMEASUREMENT AS date)
                 ORDER BY measured_at
             """
@@ -212,11 +212,11 @@ class AgroRepository:
             "rainfall": _value(values, "Lluvia"),
             "solar_radiation_avg": _value(values, "RadSol_AVG"),
             "solar_radiation_max": _value(values, "RadSol_Max"),
-            "wind_speed_avg": _value(values, "VV_Sonic_AVG") or _value(values, "VV_Mec_AVG"),
-            "wind_speed_max": _value(values, "VV_Sonic_Max") or _value(values, "VV_Mec_Max"),
-            "wind_direction_avg": _value(values, "DV_Sonic_AVG") or _value(values, "DV_Mec_AVG"),
+            "wind_speed_avg": _first_value(values, "VV_Sonic_AVG", "VV_Mec_AVG"),
+            "wind_speed_max": _first_value(values, "VV_Sonic_Max", "VV_Mec_Max"),
+            "wind_direction_avg": _first_value(values, "DV_Sonic_AVG", "DV_Mec_AVG"),
             "battery_voltage": _value(values, "Bateria"),
-            "leaf_humidity_avg": _value(values, "Hum_Hoja_AVG") or _value(values, "Hum_Hoja"),
+            "leaf_humidity_avg": _first_value(values, "Hum_Hoja_AVG", "Hum_Hoja"),
             "nitrogen": _value(values, "N"),
             "phosphorus": _value(values, "P"),
             "potassium": _value(values, "K"),
@@ -308,7 +308,7 @@ class AgroRepository:
     def _station_warnings(self, station_id: int) -> list[str]:
         if station_id == 101:
             return [
-                "HUACA usa nomenclatura antigua y N/P/K con PARID=1; los nutrientes se muestran como referencia tecnica."
+                "HUACA usa sensores con unidades distintas; los nutrientes se muestran solo como referencia y no deben compararse directamente con otras estaciones."
             ]
         return []
 
@@ -320,6 +320,14 @@ def _value(values: dict[str, dict[str, Any]], key: str) -> float | None:
     return float(row["value"])
 
 
+def _first_value(values: dict[str, dict[str, Any]], *keys: str) -> float | None:
+    for key in keys:
+        value = _value(values, key)
+        if value is not None:
+            return value
+    return None
+
+
 def _iso(value: Any) -> str | None:
     if value is None:
         return None
@@ -328,6 +336,25 @@ def _iso(value: Any) -> str | None:
     if isinstance(value, date):
         return datetime.combine(value, datetime.min.time()).isoformat()
     return str(value)
+
+
+def _query_bounds(from_date: datetime, to_date: datetime) -> tuple[datetime, datetime]:
+    to_bound = to_date
+    if to_bound.time() == datetime.min.time():
+        to_bound = to_bound + timedelta(days=1)
+    if to_bound <= from_date:
+        raise ValueError("El parametro to debe ser mayor que from.")
+    return from_date, to_bound
+
+
+def _bucket_aggregate(standard_name: str) -> str:
+    if standard_name == "Lluvia":
+        return "SUM"
+    if standard_name.endswith("_Min"):
+        return "MIN"
+    if standard_name.endswith("_Max"):
+        return "MAX"
+    return "AVG"
 
 
 def _data_status(latest_time: Any) -> str:

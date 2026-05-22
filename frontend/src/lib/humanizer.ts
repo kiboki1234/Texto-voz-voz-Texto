@@ -1,11 +1,10 @@
 import { formatNumber } from './format';
 
 const warningTranslations: Record<string, string> = {
-  'HUACA reporta N/P/K con PARID=1; validar unidad antes de comparaciones agronomicas.': 'El sensor de nutrientes del suelo necesita revisión. Los datos pueden no ser precisos.',
-  'HUACA reporta N/P/K con unidad no confiable (PARID=1); usar como referencia.': 'El sensor de tierra está fallando. Los datos pueden ser inexactos.',
   'HUACA puede reportar solo HumHoja sin minimo/maximo.': 'El sensor de humedad de hoja tiene lectura limitada en esta estación.',
-  'HUACA usa nomenclatura antigua y N/P/K con PARID=1; los nutrientes se muestran como referencia tecnica.': 'Esta estación usa sensores antiguos. Los datos de nutrientes son referenciales.',
-  'HUACA usa nomenclatura antigua y N/P/K con PARID=1; los nutrientes se muestran como referencia técnica.': 'Esta estación usa sensores antiguos. Los datos de nutrientes son referenciales.',
+  'HUACA usa sensores con unidades distintas; los nutrientes se muestran solo como referencia y no deben compararse directamente con otras estaciones.': 'Esta estación usa sensores con unidades distintas. Los datos de nutrientes son referenciales.',
+  'HUACA usa sensores de suelo con unidades distintas; los nutrientes se muestran solo como referencia.': 'Esta estación usa sensores con unidades distintas. Los datos de nutrientes son referenciales.',
+  'HUACA usa sensores de nutrientes con unidades distintas; validar antes de comparar con otras estaciones.': 'Esta estación usa sensores con unidades distintas. Los datos de nutrientes son referenciales.',
 };
 
 export function humanizeWarning(raw: string): string {

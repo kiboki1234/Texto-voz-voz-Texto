@@ -40,8 +40,8 @@ export function useNpk(stationId: number) {
   return useQuery({ queryKey: ['npk', stationId], queryFn: () => api.npk(stationId) });
 }
 
-export function useOmbrothermal(stationId: number, year: number) {
-  return useQuery({ queryKey: ['ombro', stationId, year], queryFn: () => api.ombrothermal(stationId, year) });
+export function useOmbrothermal(stationId: number, from: string, to: string) {
+  return useQuery({ queryKey: ['ombro', stationId, from, to], queryFn: () => api.ombrothermal(stationId, from, to) });
 }
 
 export function useEto(stationId: number, from: string, to: string) {

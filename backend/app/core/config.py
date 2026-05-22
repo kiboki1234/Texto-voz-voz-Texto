@@ -49,6 +49,11 @@ class Settings:
     cors_origins: list[str] = None  # type: ignore[assignment]
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 
+    telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
+    telegram_notifications_enabled: bool = _bool_env("TELEGRAM_NOTIFICATIONS_ENABLED", False)
+    telegram_alert_interval_seconds: int = int(os.getenv("TELEGRAM_ALERT_INTERVAL_SECONDS", "900"))
+
     def __post_init__(self) -> None:
         object.__setattr__(
             self,

@@ -42,8 +42,8 @@ export const api = {
   stationAlerts: (stationId: number) => request<{ alerts: Alert[] }>(`/stations/${stationId}/alerts`),
   sprayWindow: (stationId: number) => request<SprayWindow>(`/analytics/spray-window?${params({ station_id: stationId })}`),
   npk: (stationId: number) => request<NpkResponse>(`/analytics/npk?${params({ station_id: stationId })}`),
-  ombrothermal: (stationId: number, year: number) =>
-    request<OmbrothermalResponse>(`/analytics/ombrothermal?${params({ station_id: stationId, year })}`),
+  ombrothermal: (stationId: number, from: string, to: string) =>
+    request<OmbrothermalResponse>(`/analytics/ombrothermal?${params({ station_id: stationId, from, to })}`),
   eto: (stationId: number, from: string, to: string) =>
     request<EtoResponse>(`/analytics/eto?${params({ station_id: stationId, from, to })}`),
   frost: (stationId: number, from: string, to: string) =>

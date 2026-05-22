@@ -106,28 +106,49 @@ export interface NpkResponse {
 
 export interface OmbrothermalResponse {
   station_id: number;
-  year: number;
-  months: { month: string; temperature_avg: number | null; precipitation: number; dry: boolean }[];
+  year: number | null;
+  from?: string;
+  to?: string;
+  rule?: string;
+  months: {
+    month: string;
+    temperature_avg: number | null;
+    temperature_2x: number | null;
+    precipitation: number | null;
+    dry: boolean | null;
+    temperature_days: number;
+    rain_days: number;
+    data_status: 'ok' | 'missing';
+  }[];
 }
 
 export interface EtoResponse {
   station_id: number;
   method: string;
-  points: { date: string; eto: number | null; rainfall: number | null }[];
+  points: { date: string; eto: number | null; rainfall: number | null; water_balance?: number | null; deficit?: number | null }[];
 }
 
 export interface WindRoseResponse {
   station_id: number;
+  source?: string;
+  total_samples?: number;
+  method?: string;
   sectors: { sector: string; count: number; avg_speed: number }[];
 }
 
 export interface FrostResponse {
   station_id: number;
+  method?: string;
   events: {
     date: string;
     temp_min: number | null;
-    humidity_avg: number | null;
-    dew_point: number | null;
+    temp_avg?: number | null;
+    estimated_humidity: number | null;
+    frost_probability: number | null;
+    temperature_factor?: number | null;
+    humidity_factor?: number | null;
+    actual_vapor_pressure?: number | null;
+    saturation_vapor_pressure?: number | null;
     risk: 'unknown' | 'normal' | 'watch' | 'critical';
     type: string | null;
     message: string;
