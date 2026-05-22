@@ -16,10 +16,10 @@ export function StationSelector({ stations = [], value, onChange, compact = fals
           return (
             <button
               key={station.station_id}
-              className={`flex min-h-touch w-full items-center justify-center whitespace-normal break-words rounded-2xl border-2 px-2 py-3 text-base font-bold leading-tight transition active:scale-[0.97] sm:text-lg ${
+              className={`flex min-h-touch w-full items-center justify-center whitespace-normal break-words rounded-[2rem] border-4 px-4 py-5 text-xl font-black leading-tight transition-all active:scale-[0.97] sm:text-2xl ${
                 isActive
-                  ? 'border-canopy bg-canopy text-white shadow-md'
-                  : 'border-slate-400 bg-white text-slate-700 shadow-sm hover:border-canopy hover:bg-canopyLight active:border-canopy active:bg-canopyLight'
+                  ? 'border-canopy bg-canopy text-white shadow-xl shadow-canopy/20'
+                  : 'border-slate-300 bg-white text-slate-800 shadow-sm hover:border-canopy hover:bg-canopyLight active:border-canopy active:bg-canopyLight'
               }`}
               onClick={() => onChange(station.station_id)}
             >

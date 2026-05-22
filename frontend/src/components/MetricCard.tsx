@@ -28,19 +28,19 @@ const iconWrappers = {
 
 export function MetricCard({ title, value, unit, icon, caption, detail, tone = 'neutral' }: MetricCardProps) {
   return (
-    <section className={`rounded-2xl border-2 p-5 shadow-sm transition-all hover:shadow-md ${tones[tone]}`}>
-      <div className="flex items-start justify-between gap-4">
+    <section className={`rounded-[2rem] border-4 p-8 shadow-sm transition-all hover:shadow-md ${tones[tone]}`}>
+      <div className="flex items-center justify-between gap-6">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-bold text-slate-500">{title}</p>
-          <p className={`mt-2 text-xl font-bold tracking-tight sm:text-2xl ${tone === 'red' ? 'text-red-800' : tone === 'amber' ? 'text-amber-800' : tone === 'green' ? 'text-emerald-800' : 'text-ink'}`}>
+          <p className="text-xl font-black uppercase tracking-wider text-slate-800 opacity-80">{title}</p>
+          <p className={`mt-2 text-3xl font-black tracking-tight sm:text-4xl ${tone === 'red' ? 'text-red-900' : tone === 'amber' ? 'text-amber-900' : tone === 'green' ? 'text-emerald-900' : 'text-slate-900'}`}>
             {value}
-            {unit ? <span className="ml-1.5 text-sm font-semibold text-slate-500 sm:text-base">{unit}</span> : null}
+            {unit ? <span className="ml-2 text-xl font-bold text-slate-700 sm:text-2xl">{unit}</span> : null}
           </p>
-          {detail ? <p className="mt-1 text-sm font-medium text-slate-600 sm:text-base">{detail}</p> : null}
+          {detail ? <p className="mt-3 text-lg font-bold text-slate-800">{detail}</p> : null}
         </div>
-        {icon ? <div className={`shrink-0 rounded-xl p-3 shadow-sm ${iconWrappers[tone]}`}>{icon}</div> : null}
+        {icon ? <div className={`shrink-0 rounded-2xl p-5 shadow-inner border-2 border-black/5 ${iconWrappers[tone]}`}>{icon}</div> : null}
       </div>
-      {caption ? <p className="mt-3 text-sm text-slate-500">{caption}</p> : null}
+      {caption ? <p className="mt-4 text-lg font-bold text-slate-700">{caption}</p> : null}
     </section>
   );
 }
