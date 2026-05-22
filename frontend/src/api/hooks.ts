@@ -21,10 +21,11 @@ export function useSummaries() {
   return useQuery({ queryKey: ['summaries'], queryFn: api.summaries });
 }
 
-export function useSeries(stationId: number, variable: string, from: string, to: string, resolution: string) {
+export function useSeries(stationId: number, variable: string, from: string, to: string, resolution: string, enabled = true) {
   return useQuery({
     queryKey: ['series', stationId, variable, from, to, resolution],
     queryFn: () => api.series(stationId, variable, from, to, resolution),
+    enabled,
   });
 }
 

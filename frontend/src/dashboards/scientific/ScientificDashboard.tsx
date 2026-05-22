@@ -19,6 +19,7 @@ export function ScientificDashboard() {
   const [from, setFrom] = useState(() => daysAgoInputValue(21));
   const [to, setTo] = useState(() => dateInputValue(new Date()));
   const resolution = 'daily';
+  const [activeVars, setActiveVars] = useState<Set<string>>(() => new Set(['Temp_AVG', 'Lluvia']));
 
   const { data: stations = [] } = useStations();
   const { data: variables = [] } = useVariables();
@@ -30,9 +31,38 @@ export function ScientificDashboard() {
   const { data: frost } = useFrost(stationId, from, to);
   const { data: windRose } = useWindRose(stationId, from, to);
 
+  const { data: mvTemp }  = useSeries(stationId, 'Temp_AVG',     from, to, resolution, activeVars.has('Temp_AVG'));
+  const { data: mvRain }  = useSeries(stationId, 'Lluvia',       from, to, resolution, activeVars.has('Lluvia'));
+  const { data: mvHum }   = useSeries(stationId, 'Humedad_AVG',  from, to, resolution, activeVars.has('Humedad_AVG'));
+  const { data: mvRad }   = useSeries(stationId, 'RadSol_AVG',   from, to, resolution, activeVars.has('RadSol_AVG'));
+  const { data: mvWind }  = useSeries(stationId, 'VV_Sonic_AVG', from, to, resolution, activeVars.has('VV_Sonic_AVG'));
+
   const selectedStation = stations.find((station) => station.station_id === stationId);
   const latestMap = Object.fromEntries((latest?.variables ?? []).map((item) => [item.standard_name, item]));
   const seriesLabels = series?.points.map((point) => formatSeriesLabel(point.time, resolution)) ?? [];
+
+  const mvXLabels = (mvTemp ?? mvRain ?? mvHum ?? mvRad ?? mvWind)
+    ?.points.map(p => formatSeriesLabel(p.time, resolution)) ?? [];
+
+  const mvSeries: object[] = [];
+  if (activeVars.has('Temp_AVG') && mvTemp?.points?.length)
+    mvSeries.push({ name: 'Temperatura (°C)', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, color: '#ef4444', lineStyle: { color: '#ef4444', width: 2 }, data: mvTemp.points.map(p => p.value) });
+  if (activeVars.has('Lluvia') && mvRain?.points?.length)
+    mvSeries.push({ name: 'Precipitacion (mm)', type: 'bar', yAxisIndex: 1, color: '#06b6d4', barMaxWidth: 8, data: mvRain.points.map(p => p.value) });
+  if (activeVars.has('Humedad_AVG') && mvHum?.points?.length)
+    mvSeries.push({ name: 'Humedad relativa (%)', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, color: '#10b981', lineStyle: { color: '#10b981', width: 2 }, data: mvHum.points.map(p => p.value) });
+  if (activeVars.has('RadSol_AVG') && mvRad?.points?.length)
+    mvSeries.push({ name: 'Radiacion solar (W/m²)', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, color: '#eab308', lineStyle: { color: '#eab308', width: 2 }, data: mvRad.points.map(p => p.value) });
+  if (activeVars.has('VV_Sonic_AVG') && mvWind?.points?.length)
+    mvSeries.push({ name: 'Viento (m/s)', type: 'line', smooth: true, symbol: 'none', yAxisIndex: 0, color: '#94a3b8', lineStyle: { color: '#94a3b8', width: 2 }, data: mvWind.points.map(p => p.value) });
+
+  function handleToggle(key: string) {
+    setActiveVars(prev => {
+      const next = new Set(prev);
+      next.has(key) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
 
   return (
     <div className="space-y-6">
@@ -102,20 +132,53 @@ export function ScientificDashboard() {
           </ChartPanel>
         </div>
 
-        <ChartPanel title="Serie historica" subtitle={`${variable} · ${series?.unit ?? ''}`}>
-          {seriesLoading ? <LoadingState /> : (
-            <ReactECharts
-              style={{ height: 360 }}
-              option={{
-                tooltip: { trigger: 'axis' },
-                grid: { left: 48, right: 24, top: 28, bottom: 70 },
-                dataZoom: [{ type: 'inside' }, { type: 'slider', height: 24 }],
-                xAxis: { type: 'category', data: seriesLabels },
-                yAxis: { type: 'value', name: series?.unit },
-                series: [{ type: 'line', smooth: true, symbol: 'none', lineStyle: { color: '#137ea0', width: 2 }, areaStyle: { color: 'rgba(19, 126, 160, 0.12)' }, data: series?.points.map((point) => point.value) ?? [] }],
-              }}
-            />
-          )}
+        <ChartPanel title="Variables en el tiempo" subtitle="Eje izquierdo: temp / humedad / radiacion / viento · Eje derecho: precipitacion">
+          <div className="flex gap-4">
+            <div className="flex-1 min-w-0">
+              <ReactECharts
+                notMerge
+                style={{ height: 360 }}
+                option={{
+                  tooltip: {
+                    trigger: 'axis',
+                    formatter: (params: any[]) =>
+                      `<b>${params[0]?.name ?? ''}</b><br/>` +
+                      params.map((p: any) =>
+                        `${p.marker}${p.seriesName}: <b>${p.value != null ? Number(p.value).toFixed(2) : '—'}</b>`
+                      ).join('<br/>'),
+                  },
+                  legend: { data: mvSeries.map((s: any) => s.name), bottom: 0, textStyle: { fontSize: 11 } },
+                  grid: { left: 48, right: 48, top: 12, bottom: 56 },
+                  dataZoom: [{ type: 'inside' }, { type: 'slider', height: 20 }],
+                  xAxis: { type: 'category', data: mvXLabels, axisLabel: { fontSize: 11 } },
+                  yAxis: [
+                    { type: 'value', position: 'left', axisLabel: { fontSize: 10, formatter: (v: number) => v.toFixed(1) }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+                    { type: 'value', name: 'mm', position: 'right', splitLine: { show: false }, axisLabel: { fontSize: 10, formatter: (v: number) => v.toFixed(1) } },
+                  ],
+                  series: mvSeries,
+                }}
+              />
+            </div>
+            <div className="w-40 shrink-0 rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Variables</p>
+              {MULTI_VARS.map(v => (
+                <label key={v.key} className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={activeVars.has(v.key)}
+                    onChange={() => handleToggle(v.key)}
+                    style={{ accentColor: v.color }}
+                    className="h-4 w-4 shrink-0 rounded"
+                  />
+                  <span className="h-2.5 w-5 shrink-0 rounded-sm" style={{ backgroundColor: v.color }} />
+                  <span className="leading-tight">
+                    <span className="text-xs font-medium text-slate-700">{v.label}</span>
+                    <span className="ml-1 text-xs text-slate-400">({v.unit})</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          </div>
         </ChartPanel>
       </section>
 
@@ -289,8 +352,30 @@ export function ScientificDashboard() {
             ))}
           </div>
         </ChartPanel>
-        <ChartPanel title="Estado Nutricional NPK del Suelo" subtitle="Nitrógeno, fósforo y potasio comparados contra rangos óptimos en mg/Kg">
+        <ChartPanel title="Estado Nutricional del Suelo (NPK)" subtitle="Comparacion contra rangos optimos por cultivo · mg/Kg">
           <NpkStatus data={npk} />
+          <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-slate-50">
+            <table className="w-full min-w-[420px] text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs font-bold uppercase tracking-wider text-slate-500">
+                  <th className="px-4 py-2 text-left">Nutriente</th>
+                  <th className="px-4 py-2 text-center text-amber-700">Deficiente</th>
+                  <th className="px-4 py-2 text-center text-emerald-700">Optimo</th>
+                  <th className="px-4 py-2 text-center text-red-700">Exceso</th>
+                </tr>
+              </thead>
+              <tbody>
+                {NPK_RANGES.map((r) => (
+                  <tr key={r.key} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-2.5 font-semibold text-slate-700">{r.label}</td>
+                    <td className="px-4 py-2.5 text-center text-amber-700">&lt; {r.low} mg/Kg</td>
+                    <td className="px-4 py-2.5 text-center font-semibold text-emerald-700">{r.low}–{r.high} mg/Kg</td>
+                    <td className="px-4 py-2.5 text-center text-red-700">&gt; {r.high} mg/Kg</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ChartPanel>
         <ChartPanel title="Rosa de vientos" subtitle={windRose?.method ?? 'Direccion por muestra, velocidad media por sector'}>
           <ReactECharts
@@ -355,3 +440,17 @@ function formatSeriesLabel(time: string, resolution: string) {
   if (resolution === 'daily') return time.slice(0, 10);
   return time.replace('T', ' ').slice(0, 16);
 }
+
+const MULTI_VARS = [
+  { key: 'Temp_AVG',     label: 'Temperatura',      unit: '°C',   color: '#ef4444' },
+  { key: 'Lluvia',       label: 'Precipitacion',    unit: 'mm',   color: '#06b6d4' },
+  { key: 'Humedad_AVG',  label: 'Humedad relativa', unit: '%',    color: '#10b981' },
+  { key: 'RadSol_AVG',   label: 'Radiacion solar',  unit: 'W/m²', color: '#eab308' },
+  { key: 'VV_Sonic_AVG', label: 'Viento',           unit: 'm/s',  color: '#94a3b8' },
+] as const;
+
+const NPK_RANGES = [
+  { key: 'N', label: 'Nitrogeno', low: 20, high: 40 },
+  { key: 'P', label: 'Fosforo',   low: 10, high: 30 },
+  { key: 'K', label: 'Potasio',   low: 80, high: 200 },
+] as const;

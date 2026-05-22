@@ -114,7 +114,7 @@ const statusStyles: Record<string, { circle: string; label: string; bg: string; 
   Esperar: { circle: 'bg-amber-100 text-amber-700', label: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-400' },
 };
 
-function WeatherBox({ title, value, desc, Icon, colorClass }: { title: string; value: string; desc: string; Icon: any; colorClass: string }) {
+function WeatherBox({ title, value, desc, Icon, color: colorClass }: { title: string; value: string; desc: string; Icon: any; color: string }) {
   return (
     <div className={`p-4 sm:p-5 rounded-2xl border-4 ${colorClass} flex flex-col items-center text-center shadow-sm h-full w-full`}>
       <Icon size={32} className="mb-2 opacity-80 shrink-0" />
