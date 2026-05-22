@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import log, sqrt
+from math import sqrt
 from typing import Any
 
 
@@ -21,24 +21,96 @@ class Alert:
         return self.__dict__.copy()
 
 
-def dew_point_magnus(temperature_c: float, humidity_percent: float) -> float:
-    humidity = max(1.0, min(100.0, humidity_percent))
-    a = 17.62
-    b = 243.12
-    gamma = (a * temperature_c / (b + temperature_c)) + log(humidity / 100.0)
-    return round((b * gamma) / (a - gamma), 2)
+def vapor_pressure_hpa(temperature_c: float) -> float:
+    exponent = (7.5 * temperature_c) / (237.3 + temperature_c)
+    return 6.11 * (10**exponent)
 
 
-def frost_classification(temp_min: float | None, humidity_avg: float | None) -> dict[str, Any]:
+def estimated_relative_humidity_from_temperatures(temp_min: float | None, temp_avg: float | None) -> float | None:
+    if temp_min is None or temp_avg is None:
+        return None
+    actual_vapor_pressure = vapor_pressure_hpa(temp_min)
+    saturation_vapor_pressure = vapor_pressure_hpa(temp_avg)
+    if saturation_vapor_pressure == 0:
+        return 0.0
+    estimated_humidity = (actual_vapor_pressure / saturation_vapor_pressure) * 100
+    return round(min(100.0, max(0.0, estimated_humidity)), 2)
+
+
+def _clamp(value: float, minimum: float = 0.0, maximum: float = 1.0) -> float:
+    return min(maximum, max(minimum, value))
+
+
+def frost_probability_percent(temp_min: float | None, estimated_humidity: float | None) -> float | None:
+    if temp_min is None or estimated_humidity is None:
+        return None
+    temperature_factor = _clamp((2.0 - temp_min) / 2.0)
+    humidity_factor = _clamp(estimated_humidity / 70.0)
+    probability = temperature_factor * (0.70 + 0.30 * humidity_factor) * 100.0
+    return round(_clamp(probability, 0.0, 100.0), 2)
+
+
+def frost_classification(temp_min: float | None, temp_avg: float | None) -> dict[str, Any]:
     if temp_min is None:
-        return {"risk": "unknown", "type": None, "message": "Sin temperatura minima."}
+        return {
+            "risk": "unknown",
+            "type": None,
+            "message": "Sin temperatura minima.",
+            "estimated_humidity": None,
+            "frost_probability": None,
+            "temperature_factor": None,
+            "humidity_factor": None,
+            "actual_vapor_pressure": None,
+            "saturation_vapor_pressure": None,
+        }
+
+    actual_vapor_pressure = round(vapor_pressure_hpa(temp_min), 3)
+    saturation_vapor_pressure = round(vapor_pressure_hpa(temp_avg), 3) if temp_avg is not None else None
+    estimated_humidity = estimated_relative_humidity_from_temperatures(temp_min, temp_avg)
+    frost_probability = frost_probability_percent(temp_min, estimated_humidity)
+    temperature_factor = round(_clamp((2.0 - temp_min) / 2.0), 3)
+    humidity_factor = round(_clamp((estimated_humidity or 0.0) / 70.0), 3) if estimated_humidity is not None else None
+    base = {
+        "estimated_humidity": estimated_humidity,
+        "frost_probability": frost_probability,
+        "temperature_factor": temperature_factor,
+        "humidity_factor": humidity_factor,
+        "actual_vapor_pressure": actual_vapor_pressure,
+        "saturation_vapor_pressure": saturation_vapor_pressure,
+    }
+
+    if estimated_humidity is None:
+        return {
+            "risk": "unknown",
+            "type": None,
+            "message": "No se pudo estimar probabilidad de helada por falta de Temp_AVG.",
+            **base,
+        }
+
     if temp_min <= 0:
-        frost_type = "blanca" if (humidity_avg or 0) >= 70 else "negra"
-        return {"risk": "critical", "type": frost_type, "message": f"Helada {frost_type} probable."}
-    if temp_min <= 2:
-        frost_type = "blanca" if (humidity_avg or 0) >= 70 else "negra"
-        return {"risk": "watch", "type": frost_type, "message": f"Riesgo de helada {frost_type}."}
-    return {"risk": "normal", "type": None, "message": "Sin riesgo de helada."}
+        frost_type = "blanca" if estimated_humidity >= 70 else "negra"
+        label = "Blanca" if frost_type == "blanca" else "Negra"
+        return {
+            "risk": "critical",
+            "type": frost_type,
+            "message": f"Probabilidad alta de Helada {label} ({frost_probability:.1f}%; HR estimada: {estimated_humidity:.1f}%).",
+            **base,
+        }
+
+    if frost_probability >= 50:
+        return {
+            "risk": "watch",
+            "type": None,
+            "message": f"Probabilidad moderada de helada ({frost_probability:.1f}%). Temperatura minima cercana a 0 C.",
+            **base,
+        }
+
+    return {
+        "risk": "normal",
+        "type": None,
+        "message": f"Probabilidad baja de helada ({frost_probability:.1f}%).",
+        **base,
+    }
 
 
 def classify_nutrient(kind: str, value: float | None) -> dict[str, Any]:
@@ -117,7 +189,7 @@ class AlertEngine:
         station_name = str(summary["station_name"])
         alerts: list[Alert] = []
 
-        frost = frost_classification(summary.get("temperature_min"), summary.get("humidity_avg"))
+        frost = frost_classification(summary.get("temperature_min"), summary.get("temperature_avg"))
         if frost["risk"] in {"watch", "critical"}:
             alerts.append(
                 Alert(

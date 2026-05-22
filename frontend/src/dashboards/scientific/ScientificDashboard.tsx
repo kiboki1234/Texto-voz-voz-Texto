@@ -185,7 +185,7 @@ export function ScientificDashboard() {
           </div>
         </ChartPanel>
 
-        <ChartPanel title="ET0, lluvia y deficit" subtitle={eto?.method}>
+        <ChartPanel title="ET0, lluvia y deficit hídrico" subtitle={eto?.method}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -197,7 +197,7 @@ export function ScientificDashboard() {
               series: [
                 { name: 'ET0', type: 'line', data: eto?.points.map((point) => point.eto) ?? [], color: '#1f7a5c' },
                 { name: 'Lluvia', type: 'bar', data: eto?.points.map((point) => point.rainfall) ?? [], color: '#137ea0' },
-                { name: 'Deficit', type: 'line', data: eto?.points.map((point) => point.deficit) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbol: 'none' },
+                { name: 'Deficit Hídrico', type: 'line', data: eto?.points.map((point) => point.deficit) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbol: 'none' },
               ],
             }}
           />
@@ -205,27 +205,86 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Heladas y punto de rocio" subtitle="Riesgo con Temp_Min; punto de rocio Magnus con Temp_AVG + Humedad_AVG">
+        <ChartPanel title="Probabilidad de helada" subtitle="Ecuaciones con Temp_Min y Temp_AVG: e, e_s, HR estimada y probabilidad">
           <ReactECharts
-            style={{ height: 300 }}
+            style={{ height: 380 }}
             option={{
               tooltip: { trigger: 'axis' },
-              legend: { bottom: 0 },
-              grid: { left: 44, right: 20, top: 24, bottom: 48 },
-              xAxis: { type: 'category', data: frost?.events.map((event) => event.date.slice(5)) ?? [] },
-              yAxis: { type: 'value', name: 'C' },
+              legend: {
+                type: 'scroll',
+                top: 0,
+                left: 8,
+                right: 8,
+                itemGap: 12,
+                textStyle: { fontSize: 11 },
+              },
+              grid: { left: 48, right: 54, top: 88, bottom: 78 },
+              xAxis: {
+                type: 'category',
+                data: frost?.events.map((event) => event.date.slice(5)) ?? [],
+                axisLabel: {
+                  interval: 'auto',
+                  rotate: 35,
+                  hideOverlap: true,
+                  margin: 14,
+                  fontSize: 11,
+                },
+              },
+              yAxis: [
+                { type: 'value', name: 'C', nameGap: 26 },
+                { type: 'value', name: 'HR / Prob %', min: 0, max: 100, nameGap: 30 },
+              ],
               series: [
-                { name: 'Temp_Min', type: 'line', data: frost?.events.map((event) => event.temp_min) ?? [], color: '#b42318' },
-                { name: 'Punto rocio', type: 'line', data: frost?.events.map((event) => event.dew_point) ?? [], color: '#137ea0' },
-                { name: 'Umbral 2C', type: 'line', data: frost?.events.map(() => 2) ?? [], color: '#c98320', lineStyle: { type: 'dashed' }, symbol: 'none' },
+                { name: 'Temp_Min', type: 'line', data: frost?.events.map((event) => event.temp_min) ?? [], color: '#b42318', symbolSize: 6 },
+                { name: 'Temp_AVG', type: 'line', data: frost?.events.map((event) => event.temp_avg) ?? [], color: '#64748b', symbolSize: 5 },
+                { name: 'HR estimada', type: 'line', yAxisIndex: 1, data: frost?.events.map((event) => event.estimated_humidity) ?? [], color: '#7c3aed', symbolSize: 6 },
+                { name: 'Probabilidad helada', type: 'line', yAxisIndex: 1, data: frost?.events.map((event) => event.frost_probability) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbolSize: 6 },
+                { name: 'Umbral helada 0C', type: 'line', data: frost?.events.map(() => 0) ?? [], color: '#b42318', lineStyle: { type: 'dotted' }, symbol: 'none' },
+                { name: 'Umbral HR 70%', type: 'line', yAxisIndex: 1, data: frost?.events.map(() => 70) ?? [], color: '#7c3aed', lineStyle: { type: 'dotted' }, symbol: 'none' },
               ],
             }}
           />
+          <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+            <p className="font-semibold">Metodologia aplicada</p>
+            <p className="mt-1">e con Temp_Min; e_s con Temp_AVG; HR estimada=(e/e_s)*100. Probabilidad = factor temperatura * (0.70 + 0.30 * factor humedad) * 100. Si Temp_Min ≤ 0 C: blanca con HR ≥ 70%, negra con HR &lt; 70%.</p>
+          </div>
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[760px] text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">Fecha</th>
+                  <th>Temp_Min</th>
+                  <th>Temp_AVG</th>
+                  <th>e</th>
+                  <th>e_s</th>
+                  <th>HR estimada</th>
+                  <th>Probabilidad</th>
+                  <th>Clasificacion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {frost?.events.map((event) => (
+                  <tr key={event.date} className="border-b border-slate-100">
+                    <td className="py-2 font-semibold">{event.date}</td>
+                    <td>{formatNumber(event.temp_min)} C</td>
+                    <td>{formatNumber(event.temp_avg)} C</td>
+                    <td>{formatNumber(event.actual_vapor_pressure, 3)} hPa</td>
+                    <td>{formatNumber(event.saturation_vapor_pressure, 3)} hPa</td>
+                    <td>{formatNumber(event.estimated_humidity)}%</td>
+                    <td className={(event.frost_probability ?? 0) >= 50 ? 'font-bold text-amber-700' : 'text-emerald-700'}>{formatNumber(event.frost_probability)}%</td>
+                    <td className={event.risk === 'critical' ? 'font-bold text-red-700' : event.risk === 'watch' ? 'font-bold text-amber-700' : 'text-emerald-700'}>{event.type ? `Helada ${event.type}` : event.risk === 'watch' ? 'Vigilancia' : 'Sin helada'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-3 grid gap-2 sm:grid-cols-3">
             {frost?.events.filter((event) => event.risk !== 'normal').slice(0, 3).map((event) => (
               <div key={event.date} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
                 <p className="font-bold">{event.date}</p>
                 <p>{event.message}</p>
+                <p className="mt-1 text-xs">Probabilidad: {formatNumber(event.frost_probability)}%</p>
+                <p className="mt-1 text-xs">HR estimada: {formatNumber(event.estimated_humidity)}%</p>
               </div>
             ))}
           </div>

@@ -138,12 +138,17 @@ export interface WindRoseResponse {
 
 export interface FrostResponse {
   station_id: number;
+  method?: string;
   events: {
     date: string;
     temp_min: number | null;
     temp_avg?: number | null;
-    humidity_avg: number | null;
-    dew_point: number | null;
+    estimated_humidity: number | null;
+    frost_probability: number | null;
+    temperature_factor?: number | null;
+    humidity_factor?: number | null;
+    actual_vapor_pressure?: number | null;
+    saturation_vapor_pressure?: number | null;
     risk: 'unknown' | 'normal' | 'watch' | 'critical';
     type: string | null;
     message: string;

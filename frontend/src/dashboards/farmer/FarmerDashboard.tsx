@@ -28,7 +28,7 @@ export function FarmerDashboard() {
     setError(null);
   }, [stationId]);
 
-  const frost = frostMessage(summary?.temperature_min, summary?.humidity_avg);
+  const frost = frostMessage(summary?.temperature_min, summary?.temperature_avg);
   const warnings = summary?.warnings ? humanizeWarnings(summary.warnings) : [];
   const batteryMsg = humanBatteryMessage(summary?.battery_voltage);
 
@@ -268,9 +268,38 @@ export function FarmerDashboard() {
   );
 }
 
-function frostMessage(tempMin?: number | null, humidity?: number | null) {
+function frostMessage(tempMin?: number | null, tempAvg?: number | null) {
   if (tempMin == null) return { label: 'Sin dato de helada', message: 'No hay temperatura mínima para evaluar riesgo de helada.', tone: 'bg-slate-50 border-slate-200 text-slate-700', severity: 'none' as const };
-  if (tempMin <= 0) return { label: '¡Alerta de helada!', message: humidity != null && humidity >= 70 ? 'Posible helada blanca. Proteja sus cultivos sensibles esta noche.' : 'Posible helada negra. Riesgo alto para sus cultivos.', tone: 'bg-red-50 border-red-300 text-red-800', severity: 'high' as const };
-  if (tempMin <= 2) return { label: 'Vigilancia por helada', message: 'La temperatura está cerca del umbral de helada. Esté atento.', tone: 'bg-amber-50 border-amber-300 text-amber-800', severity: 'watch' as const };
+  const estimatedHumidity = estimatedRelativeHumidityFromTemperatures(tempMin, tempAvg);
+  const probability = frostProbabilityFromTemperatures(tempMin, estimatedHumidity);
+  if (estimatedHumidity == null || probability == null) {
+    return { label: 'Sin dato completo de helada', message: 'Falta temperatura promedio para calcular la probabilidad de helada.', tone: 'bg-slate-50 border-slate-200 text-slate-700', severity: 'none' as const };
+  }
+  if (tempMin <= 0) {
+    if (estimatedHumidity >= 70) {
+      return { label: '¡Alerta de helada blanca!', message: `Probabilidad calculada ${probability.toFixed(0)}%. Proteja sus cultivos sensibles esta noche.`, tone: 'bg-red-50 border-red-300 text-red-800', severity: 'high' as const };
+    }
+    return { label: '¡Alerta de helada negra!', message: `Probabilidad calculada ${probability.toFixed(0)}%. Riesgo alto para sus cultivos.`, tone: 'bg-red-50 border-red-300 text-red-800', severity: 'high' as const };
+  }
+  if (probability >= 50) {
+    return { label: 'Vigilancia por helada', message: `Probabilidad calculada ${probability.toFixed(0)}%. La temperatura mínima está cerca de cero grados.`, tone: 'bg-amber-50 border-amber-300 text-amber-800', severity: 'watch' as const };
+  }
   return { label: 'Sin riesgo de helada', message: 'Las condiciones actuales son seguras para sus cultivos.', tone: 'bg-emerald-50 border-emerald-300 text-emerald-800', severity: 'none' as const };
+}
+
+function estimatedRelativeHumidityFromTemperatures(tempMin: number, tempAvg?: number | null) {
+  if (tempAvg == null) return null;
+  const vaporPressure = (temperature: number) => 6.11 * 10 ** ((7.5 * temperature) / (237.3 + temperature));
+  const e = vaporPressure(tempMin);
+  const es = vaporPressure(tempAvg);
+  if (es === 0) return 0;
+  return Math.min(100, Math.max(0, (e / es) * 100));
+}
+
+function frostProbabilityFromTemperatures(tempMin: number, estimatedHumidity: number | null) {
+  if (estimatedHumidity == null) return null;
+  const clamp = (value: number) => Math.min(1, Math.max(0, value));
+  const temperatureFactor = clamp((2 - tempMin) / 2);
+  const humidityFactor = clamp(estimatedHumidity / 70);
+  return clamp(temperatureFactor * (0.7 + 0.3 * humidityFactor)) * 100;
 }

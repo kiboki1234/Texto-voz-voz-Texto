@@ -5,7 +5,7 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, Request
 
-from app.modules.alerts.rules import classify_nutrient, dew_point_magnus, eto_hargreaves, frost_classification, spray_window
+from app.modules.alerts.rules import classify_nutrient, eto_hargreaves, frost_classification, spray_window
 
 
 router = APIRouter(tags=["analytics"])
@@ -49,20 +49,16 @@ def frost(
     repo = _repository(request)
     temp_min = repo.get_series(station_id, "Temp_Min", from_date, to_date, "daily")["points"]
     temp_avg = repo.get_series(station_id, "Temp_AVG", from_date, to_date, "daily")["points"]
-    humidity = repo.get_series(station_id, "Humedad_AVG", from_date, to_date, "daily")["points"]
     temp_avg_by_time = {point["time"][:10]: point["value"] for point in temp_avg}
-    humidity_by_time = {point["time"][:10]: point["value"] for point in humidity}
     events = []
     for point in temp_min:
         day = point["time"][:10]
         t_avg = temp_avg_by_time.get(day)
-        h = humidity_by_time.get(day)
-        classification = frost_classification(point["value"], h)
-        dew_point = dew_point_magnus(t_avg, h) if t_avg is not None and h is not None else None
-        events.append({"date": day, "temp_min": point["value"], "temp_avg": t_avg, "humidity_avg": h, "dew_point": dew_point, **classification})
+        classification = frost_classification(point["value"], t_avg)
+        events.append({"date": day, "temp_min": point["value"], "temp_avg": t_avg, **classification})
     return {
         "station_id": station_id,
-        "method": "Riesgo con Temp_Min diaria y Humedad_AVG diaria. Punto de rocio estimado con Temp_AVG diaria y Humedad_AVG diaria (Magnus).",
+        "method": "Se calcula e con Temp_Min, e_s con Temp_AVG y HR estimada = e/e_s*100. Probabilidad = factor_temperatura * (0.70 + 0.30*factor_humedad) * 100; factor_temperatura=(2-Temp_Min)/2 limitado a 0..1; factor_humedad=HR/70 limitado a 0..1. Si Temp_Min <= 0: blanca con HR >= 70%, negra con HR < 70%.",
         "events": events,
     }
 

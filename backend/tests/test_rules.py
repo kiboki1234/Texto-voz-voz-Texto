@@ -1,16 +1,43 @@
-from app.modules.alerts.rules import AlertEngine, battery_threshold, classify_nutrient, dew_point_magnus, frost_classification, spray_window
+from app.modules.alerts.rules import AlertEngine, battery_threshold, classify_nutrient, estimated_relative_humidity_from_temperatures, frost_classification, frost_probability_percent, spray_window
 
 
-def test_frost_white_watch() -> None:
-    result = frost_classification(1.5, 80)
-    assert result["risk"] == "watch"
+def test_estimated_relative_humidity_is_clamped() -> None:
+    result = estimated_relative_humidity_from_temperatures(4, 2)
+    assert result == 100.0
+
+
+def test_frost_white_critical_with_estimated_humidity() -> None:
+    result = frost_classification(-1.0, 0.0)
+    assert result["risk"] == "critical"
     assert result["type"] == "blanca"
+    assert result["estimated_humidity"] >= 70
+    assert result["frost_probability"] == 100.0
 
 
-def test_frost_black_critical() -> None:
-    result = frost_classification(-0.2, 45)
+def test_frost_black_critical_with_estimated_humidity() -> None:
+    result = frost_classification(-2.0, 10.0)
     assert result["risk"] == "critical"
     assert result["type"] == "negra"
+    assert result["estimated_humidity"] < 70
+
+
+def test_frost_above_zero_near_threshold_is_watch() -> None:
+    result = frost_classification(0.1, 2.0)
+    assert result["risk"] == "watch"
+    assert result["type"] is None
+    assert result["frost_probability"] >= 50
+
+
+def test_frost_probability_uses_temperature_and_humidity_factors() -> None:
+    assert frost_probability_percent(0, 70) == 100.0
+    assert frost_probability_percent(1, 70) == 50.0
+    assert frost_probability_percent(3, 70) == 0.0
+
+
+def test_frost_above_two_degrees_is_normal() -> None:
+    result = frost_classification(3.0, 6.0)
+    assert result["risk"] == "normal"
+    assert result["frost_probability"] == 0.0
 
 
 def test_spray_window_returns_reasons() -> None:
@@ -23,10 +50,6 @@ def test_npk_classification() -> None:
     assert classify_nutrient("N", 12)["status"] == "deficient"
     assert classify_nutrient("P", 18)["status"] == "optimal"
     assert classify_nutrient("K", 240)["status"] == "excess"
-
-
-def test_dew_point_is_numeric() -> None:
-    assert isinstance(dew_point_magnus(12, 80), float)
 
 
 def test_battery_threshold_is_adaptive() -> None:
