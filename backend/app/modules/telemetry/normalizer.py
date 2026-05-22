@@ -74,11 +74,14 @@ class VariableNormalizer:
         for definition in VARIABLES:
             if raw_code in definition.tag_codes or raw_name in {_clean(alias) for alias in definition.aliases}:
                 warning = self._warning(definition, parameter_id, station_id)
+                normalized_unit = str(unit or definition.default_unit)
+                if station_id == 101 and definition.standard_name in {"N", "P", "K"} and str(parameter_id) == "1":
+                    normalized_unit = "sin unidad"
                 return NormalizedVariable(
                     standard_name=definition.standard_name,
                     display_name=definition.display_name,
                     category=definition.category,
-                    unit=str(unit or definition.default_unit),
+                    unit=normalized_unit,
                     warning=warning,
                 )
         fallback = str(name or code or "Variable desconocida")

@@ -2,7 +2,7 @@
 
 ## Backend
 
-- [ ] `GET /api/health` responde en modo SQL Server o mock.
+- [ ] `GET /api/health` responde `database=reachable` y `mode=sqlserver`.
 - [ ] `GET /api/stations` devuelve seis estaciones.
 - [ ] `GET /api/stations/102/latest` usa datos de `recentvalues`.
 - [ ] `GET /api/stations/102/series` exige `variable`, `from` y `to`.
@@ -18,12 +18,12 @@
 - [ ] `/cientifico` grafica serie con zoom y export CSV.
 - [ ] `/gad` muestra las seis estaciones y alertas.
 - [ ] `/agricultor` funciona en ancho movil.
-- [ ] La app sobrevive si la API cae usando fallback mock.
+- [ ] Si la API cae, la app no muestra datos inventados.
 
 ## Demo
 
 - [ ] Ejecutar con SQL Server real.
-- [ ] Ejecutar con `USE_MOCK_DATA=true`.
+- [ ] Confirmar que no hay modo mock activo en runtime.
 - [ ] Mostrar DER logico.
 - [ ] Explicar por que no se modifica la base YDOC.
 - [ ] Mostrar una alerta explicable y una recomendacion de fumigacion.

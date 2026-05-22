@@ -46,7 +46,7 @@ def create_app() -> FastAPI:
             "status": "ok",
             "database": database_status,
             "version": settings.app_version,
-            "mode": "mock" if db.use_mock_data else "sqlserver",
+            "mode": "sqlserver",
         }
 
     app.include_router(stations_router, prefix="/api")

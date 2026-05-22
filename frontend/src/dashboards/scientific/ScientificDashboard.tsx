@@ -2,7 +2,7 @@ import ReactECharts from 'echarts-for-react';
 import { Download, Droplets, Gauge, Leaf, Sun, Thermometer, Wind, Zap } from 'lucide-react';
 import { useState } from 'react';
 import { api } from '../../api/client';
-import { useEto, useLatest, useNpk, useOmbrothermal, useSeries, useStations, useVariables, useWindRose } from '../../api/hooks';
+import { useEto, useFrost, useLatest, useNpk, useOmbrothermal, useSeries, useStations, useVariables, useWindRose } from '../../api/hooks';
 import { ChartPanel } from '../../components/ChartPanel';
 import { DateRangePicker } from '../../components/DateRangePicker';
 import { LoadingState } from '../../components/LoadingState';
@@ -26,6 +26,7 @@ export function ScientificDashboard() {
   const { data: npk } = useNpk(stationId);
   const { data: ombro } = useOmbrothermal(stationId, 2026);
   const { data: eto } = useEto(stationId, from, to);
+  const { data: frost } = useFrost(stationId, from, to);
   const { data: windRose } = useWindRose(stationId, from, to);
 
   const selectedStation = stations.find((station) => station.station_id === stationId);
@@ -159,6 +160,31 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
+        <ChartPanel title="Heladas y punto de rocio" subtitle="Temp_Min + Humedad_AVG, clasificacion blanca/negra">
+          <ReactECharts
+            style={{ height: 300 }}
+            option={{
+              tooltip: { trigger: 'axis' },
+              legend: { bottom: 0 },
+              grid: { left: 44, right: 20, top: 24, bottom: 48 },
+              xAxis: { type: 'category', data: frost?.events.map((event) => event.date.slice(5)) ?? [] },
+              yAxis: { type: 'value', name: 'C' },
+              series: [
+                { name: 'Temp_Min', type: 'line', data: frost?.events.map((event) => event.temp_min) ?? [], color: '#b42318' },
+                { name: 'Punto rocio', type: 'line', data: frost?.events.map((event) => event.dew_point) ?? [], color: '#137ea0' },
+                { name: 'Umbral 2C', type: 'line', data: frost?.events.map(() => 2) ?? [], color: '#c98320', lineStyle: { type: 'dashed' }, symbol: 'none' },
+              ],
+            }}
+          />
+          <div className="mt-3 grid gap-2 sm:grid-cols-3">
+            {frost?.events.filter((event) => event.risk !== 'normal').slice(0, 3).map((event) => (
+              <div key={event.date} className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p className="font-bold">{event.date}</p>
+                <p>{event.message}</p>
+              </div>
+            ))}
+          </div>
+        </ChartPanel>
         <ChartPanel title="NPK suelo" subtitle="Bandas: deficiente, optimo, exceso">
           <NpkStatus data={npk} />
         </ChartPanel>

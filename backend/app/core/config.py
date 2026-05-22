@@ -48,7 +48,6 @@ class Settings:
 
     cors_origins: list[str] = None  # type: ignore[assignment]
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "60"))
-    force_mock_data: bool = _bool_env("USE_MOCK_DATA", False)
 
     def __post_init__(self) -> None:
         object.__setattr__(

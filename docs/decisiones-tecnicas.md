@@ -12,9 +12,9 @@
 
 La base `Insights` se trata como fuente externa de solo lectura. AgroMetrIA no ejecuta migraciones ni `ALTER TABLE` sobre SQL Server.
 
-## Fallback demo
+## Fuente de datos
 
-El backend cambia a mock si `USE_MOCK_DATA=true`, falta `MSSQL_PASSWORD` o no se puede usar `pyodbc`. El frontend tambien tiene fallback mock si la API no responde.
+La aplicacion no usa datos mock en runtime. Si SQL Server no esta disponible, la API debe fallar de forma visible para no mezclar datos reales con datos inventados.
 
 ## Limitaciones declaradas
 

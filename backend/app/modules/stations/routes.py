@@ -43,6 +43,41 @@ def series(
     return _repository(request).get_series(station_id, variable, from_date, to_date, resolution)
 
 
+@router.get("/estado-actual")
+def estado_actual(request: Request) -> dict:
+    rows = []
+    repo = _repository(request)
+    for station in repo.get_stations():
+        latest_payload = repo.get_latest(station["station_id"])
+        for variable in latest_payload["variables"]:
+            rows.append(
+                {
+                    "station_id": latest_payload["station_id"],
+                    "estacion": latest_payload["station_name"],
+                    "variable": variable["standard_name"],
+                    "tag_code": variable["code"],
+                    "valor": variable["value"],
+                    "unidad": variable["unit"],
+                    "timestamp": variable.get("measured_at") or latest_payload.get("latest_time"),
+                    "calidad": variable["quality"],
+                }
+            )
+    return {"rows": rows}
+
+
+@router.get("/serie/{station}/{variable}")
+def serie_compat(
+    station: str,
+    variable: str,
+    request: Request,
+    from_date: datetime = Query(..., alias="from"),
+    to_date: datetime = Query(..., alias="to"),
+    resolution: str = Query("raw"),
+) -> dict:
+    station_id = _repository(request).resolve_station_id(station)
+    return _repository(request).get_series(station_id, variable, from_date, to_date, resolution)
+
+
 @router.get("/variables")
 def variables(request: Request) -> list[dict]:
     return _repository(request).variable_options()

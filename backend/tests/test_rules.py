@@ -1,4 +1,4 @@
-from app.modules.alerts.rules import classify_nutrient, dew_point_magnus, frost_classification, spray_window
+from app.modules.alerts.rules import AlertEngine, battery_threshold, classify_nutrient, dew_point_magnus, frost_classification, spray_window
 
 
 def test_frost_white_watch() -> None:
@@ -27,3 +27,30 @@ def test_npk_classification() -> None:
 
 def test_dew_point_is_numeric() -> None:
     assert isinstance(dew_point_magnus(12, 80), float)
+
+
+def test_battery_threshold_is_adaptive() -> None:
+    assert battery_threshold(3.9) == 3.7
+    assert battery_threshold(12.1) == 11.5
+
+
+def test_alert_engine_uses_documented_thresholds() -> None:
+    alerts = AlertEngine().evaluate(
+        {
+            "station_id": 102,
+            "station_name": "CAYAMBE",
+            "temperature_min": 4,
+            "humidity_avg": 75,
+            "temperature_avg": 18,
+            "wind_speed_max": 16,
+            "rainfall": 21,
+            "battery_voltage": 12,
+            "leaf_humidity_avg": 92,
+            "solar_radiation_max": 1001,
+            "nitrogen": 30,
+            "phosphorus": 20,
+            "potassium": 120,
+        }
+    )
+    categories = {alert.category for alert in alerts}
+    assert {"wind", "rain", "leaf_humidity", "solar_radiation"}.issubset(categories)

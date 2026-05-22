@@ -46,7 +46,7 @@ export function Layout() {
       <footer className="border-t border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-4 py-4 text-xs text-slate-500">
           <BarChart3 size={15} />
-          Fuente: SQL Server Insights en modo solo lectura con fallback mock para demo.
+          Fuente: SQL Server Insights en modo solo lectura.
         </div>
       </footer>
     </div>

@@ -107,6 +107,10 @@ def eto_hargreaves(temp_min: float | None, temp_max: float | None, temp_avg: flo
     return round(0.0023 * (temp_avg + 17.8) * sqrt(delta) * ra, 2)
 
 
+def battery_threshold(voltage: float) -> float:
+    return 11.5 if voltage > 6 else 3.7
+
+
 class AlertEngine:
     def evaluate(self, summary: dict[str, Any]) -> list[Alert]:
         station_id = int(summary["station_id"])
@@ -129,21 +133,30 @@ class AlertEngine:
                 )
             )
 
-        wind = summary.get("wind_speed_avg")
-        if wind is not None and wind >= 8:
-            alerts.append(Alert(f"{station_id}-wind", station_id, station_name, "warning", "wind", "Viento fuerte", f"Viento promedio {wind:.1f} m/s.", wind, "m/s"))
+        wind = summary.get("wind_speed_max") or summary.get("wind_speed_avg")
+        if wind is not None and wind > 15:
+            alerts.append(Alert(f"{station_id}-wind", station_id, station_name, "warning", "wind", "Viento fuerte", f"Velocidad maxima de viento {wind:.1f} m/s.", wind, "m/s"))
 
         rain = summary.get("rainfall")
-        if rain is not None and rain >= 10:
-            alerts.append(Alert(f"{station_id}-rain", station_id, station_name, "warning", "rain", "Lluvia intensa", f"Precipitacion {rain:.1f} mm.", rain, "mm"))
+        if rain is not None and rain > 20:
+            alerts.append(Alert(f"{station_id}-rain", station_id, station_name, "warning", "rain", "Lluvia intensa", f"Precipitacion acumulada {rain:.1f} mm.", rain, "mm"))
 
         battery = summary.get("battery_voltage")
-        if battery is not None and battery < 3.7:
-            alerts.append(Alert(f"{station_id}-battery", station_id, station_name, "critical", "battery", "Bateria critica", f"Bateria en {battery:.2f} V.", battery, "V"))
+        if battery is not None and battery < battery_threshold(float(battery)):
+            threshold = battery_threshold(float(battery))
+            alerts.append(Alert(f"{station_id}-battery", station_id, station_name, "critical", "battery", "Bateria critica", f"Bateria en {battery:.2f} V; umbral aplicado {threshold:.1f} V.", battery, "V"))
 
         leaf = summary.get("leaf_humidity_avg")
         if leaf is not None and leaf >= 85:
             alerts.append(Alert(f"{station_id}-leaf", station_id, station_name, "warning", "leaf_humidity", "Riesgo de hongos", f"Humedad de hoja {leaf:.1f}%.", leaf, "%"))
+
+        temp_avg = summary.get("temperature_avg")
+        if leaf is not None and temp_avg is not None and leaf > 90 and 15 <= temp_avg <= 25:
+            alerts.append(Alert(f"{station_id}-mildew", station_id, station_name, "warning", "leaf_humidity", "Riesgo de mildiu", f"Humedad de hoja {leaf:.1f}% con temperatura {temp_avg:.1f} C.", leaf, "%"))
+
+        solar = summary.get("solar_radiation_max")
+        if solar is not None and solar > 1000:
+            alerts.append(Alert(f"{station_id}-solar", station_id, station_name, "warning", "solar_radiation", "Radiacion extrema", f"Radiacion maxima {solar:.1f} W/m2.", solar, "W/m2"))
 
         spray = spray_window(summary)
         if not spray["is_suitable"]:
@@ -152,6 +165,8 @@ class AlertEngine:
         for kind, field in {"N": "nitrogen", "P": "phosphorus", "K": "potassium"}.items():
             nutrient = classify_nutrient(kind, summary.get(field))
             if nutrient["status"] == "deficient":
-                alerts.append(Alert(f"{station_id}-npk-{kind}", station_id, station_name, "warning", "npk", f"{kind} deficiente", f"{kind} por debajo del rango recomendado.", summary.get(field), "mg/Kg"))
+                unit = "sin unidad" if station_id == 101 else "mg/Kg"
+                suffix = " Unidad de HUACA no confiable." if station_id == 101 else ""
+                alerts.append(Alert(f"{station_id}-npk-{kind}", station_id, station_name, "warning", "npk", f"{kind} deficiente", f"{kind} por debajo del rango recomendado.{suffix}", summary.get(field), unit))
 
         return alerts

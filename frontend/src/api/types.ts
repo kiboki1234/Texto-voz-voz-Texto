@@ -23,6 +23,13 @@ export interface VariableReading {
   measured_at?: string;
 }
 
+export interface VariableOption {
+  standard_name: string;
+  display_name: string;
+  category: string;
+  unit: string;
+}
+
 export interface LatestResponse {
   station_id: number;
   station_name: string;
@@ -56,7 +63,9 @@ export interface Summary {
   humidity_avg?: number | null;
   rainfall?: number | null;
   solar_radiation_avg?: number | null;
+  solar_radiation_max?: number | null;
   wind_speed_avg?: number | null;
+  wind_speed_max?: number | null;
   wind_direction_avg?: number | null;
   battery_voltage?: number | null;
   leaf_humidity_avg?: number | null;
@@ -110,4 +119,17 @@ export interface EtoResponse {
 export interface WindRoseResponse {
   station_id: number;
   sectors: { sector: string; count: number; avg_speed: number }[];
+}
+
+export interface FrostResponse {
+  station_id: number;
+  events: {
+    date: string;
+    temp_min: number | null;
+    humidity_avg: number | null;
+    dew_point: number | null;
+    risk: 'unknown' | 'normal' | 'watch' | 'critical';
+    type: string | null;
+    message: string;
+  }[];
 }

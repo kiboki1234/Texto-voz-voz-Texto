@@ -48,6 +48,10 @@ export function useEto(stationId: number, from: string, to: string) {
   return useQuery({ queryKey: ['eto', stationId, from, to], queryFn: () => api.eto(stationId, from, to) });
 }
 
+export function useFrost(stationId: number, from: string, to: string) {
+  return useQuery({ queryKey: ['frost', stationId, from, to], queryFn: () => api.frost(stationId, from, to) });
+}
+
 export function useWindRose(stationId: number, from: string, to: string) {
   return useQuery({ queryKey: ['windRose', stationId, from, to], queryFn: () => api.windRose(stationId, from, to) });
 }

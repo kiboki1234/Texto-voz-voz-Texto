@@ -22,7 +22,7 @@ No usamos una caja negra para decisiones criticas. Implementamos reglas agromete
 
 ## 5. Viabilidad
 
-La solucion no modifica SQL Server. Puede conectarse al servidor principal porque respeta el esquema YDOC. Si la red falla durante la demo, corre con mocks versionados.
+La solucion no modifica SQL Server y se conecta directamente al esquema YDOC en modo solo lectura.
 
 ## Cierre
 

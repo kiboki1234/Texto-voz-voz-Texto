@@ -21,12 +21,7 @@ Copy-Item .env.example .env
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Para demo sin SQL Server:
-
-```powershell
-$env:USE_MOCK_DATA="true"
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
+La aplicacion no usa datos mock en runtime. Si SQL Server no responde, el backend debe reportar error en lugar de mostrar datos inventados.
 
 ## Frontend
 
@@ -40,7 +35,6 @@ Variables opcionales:
 
 ```text
 VITE_API_URL=http://localhost:8000/api
-VITE_USE_MOCKS=true
 ```
 
 ## Endpoints principales

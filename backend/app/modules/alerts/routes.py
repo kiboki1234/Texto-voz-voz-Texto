@@ -19,6 +19,11 @@ def current_alerts(request: Request) -> dict:
     return {"alerts": alerts}
 
 
+@router.get("/alertas")
+def alertas(request: Request) -> dict:
+    return current_alerts(request)
+
+
 @router.get("/stations/{station_id}/alerts")
 def station_alerts(station_id: int, request: Request) -> dict:
     summary = _repository(request).get_summary(station_id)

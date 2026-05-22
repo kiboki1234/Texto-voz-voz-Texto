@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
-from app.db import mock_data
 from app.db.client import DatabaseClient
 from app.modules.telemetry.normalizer import VariableNormalizer
 
@@ -14,8 +13,6 @@ class AgroRepository:
         self.normalizer = VariableNormalizer()
 
     def get_stations(self) -> list[dict[str, Any]]:
-        if self.db.use_mock_data:
-            return mock_data.STATIONS
         sql = """
             SELECT
                 l.LOCID AS station_id,
@@ -47,15 +44,6 @@ class AgroRepository:
         station = self.get_station(station_id)
         if station is None:
             raise ValueError(f"Estacion {station_id} no existe.")
-        if self.db.use_mock_data:
-            variables = mock_data.latest_values(station_id)
-            return {
-                "station_id": station_id,
-                "station_name": station["name"],
-                "latest_time": station["latest_time"],
-                "variables": variables,
-                "warnings": self._station_warnings(station_id),
-            }
 
         sql = """
             SELECT
@@ -125,16 +113,6 @@ class AgroRepository:
             raise ValueError("El parametro to debe ser mayor que from.")
         if resolution not in {"raw", "hourly", "daily"}:
             raise ValueError("resolution debe ser raw, hourly o daily.")
-
-        if self.db.use_mock_data:
-            return {
-                "station_id": station_id,
-                "station_name": station["name"],
-                "variable": definition.standard_name,
-                "unit": definition.default_unit,
-                "resolution": resolution,
-                "points": mock_data.series(station_id, definition.standard_name, resolution),
-            }
 
         tag_ids = self._tag_ids_for_standard(station_id, definition.standard_name)
         if not tag_ids:
@@ -209,7 +187,9 @@ class AgroRepository:
             "humidity_avg": _value(values, "Humedad_AVG"),
             "rainfall": _value(values, "Lluvia"),
             "solar_radiation_avg": _value(values, "RadSol_AVG"),
+            "solar_radiation_max": _value(values, "RadSol_Max"),
             "wind_speed_avg": _value(values, "VV_Sonic_AVG") or _value(values, "VV_Mec_AVG"),
+            "wind_speed_max": _value(values, "VV_Sonic_Max") or _value(values, "VV_Mec_Max"),
             "wind_direction_avg": _value(values, "DV_Sonic_AVG") or _value(values, "DV_Mec_AVG"),
             "battery_voltage": _value(values, "Bateria"),
             "leaf_humidity_avg": _value(values, "Hum_Hoja_AVG") or _value(values, "Hum_Hoja"),
@@ -224,6 +204,15 @@ class AgroRepository:
 
     def variable_options(self) -> list[dict[str, str]]:
         return self.normalizer.variable_options()
+
+    def resolve_station_id(self, station: str) -> int:
+        if station.isdigit():
+            return int(station)
+        normalized = station.strip().upper()
+        for item in self.get_stations():
+            if str(item["name"]).strip().upper() == normalized:
+                return int(item["station_id"])
+        raise ValueError(f"Estacion no soportada: {station}.")
 
     def _tag_ids_for_standard(self, station_id: int, standard_name: str) -> list[int]:
         sql = """

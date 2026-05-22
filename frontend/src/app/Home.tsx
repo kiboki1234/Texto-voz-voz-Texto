@@ -26,7 +26,7 @@ export function Home() {
           </div>
           <div className="rounded-md border border-slate-200 bg-field px-4 py-3 text-sm text-slate-700">
             <MapPinned className="mb-2 text-canopy" size={22} />
-            6 estaciones · solo lectura · demo con fallback mock
+            6 estaciones · solo lectura · datos reales SQL Server
           </div>
         </div>
       </section>
