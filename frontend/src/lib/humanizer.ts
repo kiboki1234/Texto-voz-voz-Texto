@@ -88,3 +88,51 @@ export function humanSoilNutrientStatus(status: string): string {
   };
   return labels[status] ?? status;
 }
+
+export function simpleSoilStatus(
+  n?: { status: string; value: number | null },
+  p?: { status: string; value: number | null },
+  k?: { status: string; value: number | null },
+): { label: string; message: string; tone: string } {
+  const deficits = [n, p, k].filter((x) => x?.status === 'deficient');
+  const excesses = [n, p, k].filter((x) => x?.status === 'excess');
+  if (deficits.length >= 2)
+    return { label: 'Tierra necesita abono', message: 'La tierra está falta de fuerza. Eche abono compuesto.', tone: 'amber' };
+  if (deficits.length === 1) {
+    const names = { N: 'nitrógeno (fuerza de hoja)', P: 'fósforo (fuerza de raíz)', K: 'potasio (fuerza de fruto)' };
+    const key = n?.status === 'deficient' ? 'N' : p?.status === 'deficient' ? 'P' : 'K';
+    return { label: 'Falta abono', message: `A la tierra le falta ${names[key]}. Eche abono de ese.`, tone: 'amber' };
+  }
+  if (excesses.length > 0)
+    return { label: 'Mucho abono', message: 'La tierra tiene mucho abono guardado. No eche más por ahora.', tone: 'amber' };
+  return { label: 'Tierra buena', message: 'La tierra está bien abonada. Siga así.', tone: 'green' };
+}
+
+export function humanTempSimple(value?: number | null): string {
+  if (value == null) return '--';
+  if (value < 10) return 'Hace frío';
+  if (value < 20) return 'Templado';
+  if (value < 30) return 'Hace calor';
+  return 'Hace mucho calor';
+}
+
+export function humanRainSimple(value?: number | null): string {
+  if (value == null) return '--';
+  if (value < 0.5) return 'Sin lluvia';
+  if (value < 10) return 'Lloviendo';
+  return 'Lluvia fuerte';
+}
+
+export function humanWindSimple(value?: number | null): string {
+  if (value == null) return '--';
+  if (value < 3) return 'Tranquilo';
+  if (value < 6) return 'Ventilando';
+  return 'Mucho viento';
+}
+
+export function humanSoilOverall(npk?: { status: string; value: number | null }[]): string {
+  if (!npk || npk.length === 0) return '--';
+  const deficits = npk.filter((x) => x.status === 'deficient');
+  if (deficits.length >= 2) return 'Hace falta abono';
+  return 'Tierra buena';
+}

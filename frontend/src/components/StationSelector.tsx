@@ -19,7 +19,7 @@ export function StationSelector({ stations = [], value, onChange, compact = fals
               className={`flex min-h-touch w-full items-center justify-center whitespace-normal break-words rounded-2xl border-2 px-2 py-3 text-base font-bold leading-tight transition active:scale-[0.97] sm:text-lg ${
                 isActive
                   ? 'border-canopy bg-canopy text-white shadow-md'
-                  : 'border-slate-200 bg-white text-slate-700 shadow-sm active:border-canopy active:bg-canopyLight'
+                  : 'border-slate-400 bg-white text-slate-700 shadow-sm hover:border-canopy hover:bg-canopyLight active:border-canopy active:bg-canopyLight'
               }`}
               onClick={() => onChange(station.station_id)}
             >
