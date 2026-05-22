@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections import defaultdict
 from datetime import datetime
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 
 from app.modules.alerts.rules import classify_nutrient, dew_point_magnus, eto_hargreaves, frost_classification, spray_window
 
@@ -85,10 +85,21 @@ def eto(
 
 
 @router.get("/analytics/ombrothermal")
-def ombrothermal(station_id: int, year: int, request: Request) -> dict:
+def ombrothermal(
+    station_id: int,
+    request: Request,
+    year: int | None = None,
+    from_date: datetime | None = Query(None, alias="from"),
+    to_date: datetime | None = Query(None, alias="to"),
+) -> dict:
     repo = _repository(request)
-    from_date = datetime(year, 1, 1)
-    to_date = datetime(year, 12, 31, 23, 59, 59)
+    if from_date is None and to_date is None:
+        selected_year = year or datetime.now().year
+        from_date = datetime(selected_year, 1, 1)
+        to_date = datetime(selected_year, 12, 31)
+    elif from_date is None or to_date is None:
+        raise HTTPException(status_code=400, detail="from y to deben enviarse juntos.")
+
     temp = repo.get_series(station_id, "Temp_AVG", from_date, to_date, "daily")["points"]
     rain = repo.get_series(station_id, "Lluvia", from_date, to_date, "daily")["points"]
     buckets: dict[str, dict[str, list[float]]] = defaultdict(lambda: {"temp": [], "rain": []})
@@ -101,7 +112,15 @@ def ombrothermal(station_id: int, year: int, request: Request) -> dict:
         t = round(sum(values["temp"]) / len(values["temp"]), 2) if values["temp"] else None
         p = round(sum(values["rain"]), 2) if values["rain"] else 0
         months.append({"month": month, "temperature_avg": t, "precipitation": p, "dry": bool(t is not None and p <= 2 * t)})
-    return {"station_id": station_id, "year": year, "months": months, "rule": "Periodo seco si P <= 2T."}
+    response_year = from_date.year if from_date.year == to_date.year else None
+    return {
+        "station_id": station_id,
+        "year": response_year,
+        "from": from_date.date().isoformat(),
+        "to": to_date.date().isoformat(),
+        "months": months,
+        "rule": "Periodo seco si P <= 2T.",
+    }
 
 
 @router.get("/analytics/wind-rose")

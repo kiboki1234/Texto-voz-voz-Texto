@@ -15,8 +15,8 @@ import { formatDateTime, formatNumber } from '../../lib/format';
 export function ScientificDashboard() {
   const [stationId, setStationId] = useState(102);
   const [variable, setVariable] = useState('Temp_AVG');
-  const [from, setFrom] = useState('2026-05-01');
-  const [to, setTo] = useState('2026-05-19');
+  const [from, setFrom] = useState(() => daysAgoInputValue(21));
+  const [to, setTo] = useState(() => dateInputValue(new Date()));
   const [resolution, setResolution] = useState('daily');
 
   const { data: stations = [] } = useStations();
@@ -24,13 +24,14 @@ export function ScientificDashboard() {
   const { data: latest, isLoading: latestLoading } = useLatest(stationId);
   const { data: series, isLoading: seriesLoading } = useSeries(stationId, variable, from, to, resolution);
   const { data: npk } = useNpk(stationId);
-  const { data: ombro } = useOmbrothermal(stationId, 2026);
+  const { data: ombro } = useOmbrothermal(stationId, from, to);
   const { data: eto } = useEto(stationId, from, to);
   const { data: frost } = useFrost(stationId, from, to);
   const { data: windRose } = useWindRose(stationId, from, to);
 
   const selectedStation = stations.find((station) => station.station_id === stationId);
   const latestMap = Object.fromEntries((latest?.variables ?? []).map((item) => [item.standard_name, item]));
+  const seriesLabels = series?.points.map((point) => formatSeriesLabel(point.time, resolution)) ?? [];
 
   return (
     <div className="space-y-6">
@@ -114,7 +115,7 @@ export function ScientificDashboard() {
                 tooltip: { trigger: 'axis' },
                 grid: { left: 48, right: 24, top: 28, bottom: 70 },
                 dataZoom: [{ type: 'inside' }, { type: 'slider', height: 24 }],
-                xAxis: { type: 'category', data: series?.points.map((point) => point.time.slice(0, 10)) ?? [] },
+                xAxis: { type: 'category', data: seriesLabels },
                 yAxis: { type: 'value', name: series?.unit },
                 series: [{ type: 'line', smooth: true, symbol: 'none', lineStyle: { color: '#137ea0', width: 2 }, areaStyle: { color: 'rgba(19, 126, 160, 0.12)' }, data: series?.points.map((point) => point.value) ?? [] }],
               }}
@@ -124,7 +125,7 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Ombrotermico Gaussen" subtitle="Periodo seco si P <= 2T">
+        <ChartPanel title="Ombrotermico Gaussen" subtitle={`${from} a ${to} · Periodo seco si P <= 2T`}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -203,7 +204,7 @@ export function ScientificDashboard() {
       </section>
 
       {latestLoading ? <LoadingState /> : (
-        <ChartPanel title="Ultimas lecturas normalizadas" subtitle="Contrato backend sobre recentvalues">
+        <ChartPanel title="Ultimas lecturas normalizadas" subtitle="Contrato backend sobre measurements">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-left text-sm">
               <thead className="border-b border-slate-200 text-xs uppercase text-slate-500">
@@ -234,4 +235,20 @@ export function ScientificDashboard() {
       )}
     </div>
   );
+}
+
+function dateInputValue(date: Date) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
+function daysAgoInputValue(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() - days);
+  return dateInputValue(date);
+}
+
+function formatSeriesLabel(time: string, resolution: string) {
+  if (resolution === 'daily') return time.slice(0, 10);
+  return time.replace('T', ' ').slice(0, 16);
 }

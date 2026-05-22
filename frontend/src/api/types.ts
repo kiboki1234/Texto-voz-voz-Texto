@@ -106,7 +106,10 @@ export interface NpkResponse {
 
 export interface OmbrothermalResponse {
   station_id: number;
-  year: number;
+  year: number | null;
+  from?: string;
+  to?: string;
+  rule?: string;
   months: { month: string; temperature_avg: number | null; precipitation: number; dry: boolean }[];
 }
 
