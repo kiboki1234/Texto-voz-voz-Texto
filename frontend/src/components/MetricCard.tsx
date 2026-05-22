@@ -7,30 +7,40 @@ interface MetricCardProps {
   tone?: 'neutral' | 'green' | 'blue' | 'amber' | 'red';
   icon?: ReactNode;
   caption?: string;
+  detail?: string;
 }
 
 const tones = {
   neutral: 'border-slate-200 bg-white',
-  green: 'border-emerald-200 bg-emerald-50',
-  blue: 'border-sky-200 bg-sky-50',
-  amber: 'border-amber-200 bg-amber-50',
-  red: 'border-red-200 bg-red-50',
+  green: 'border-emerald-300 bg-emerald-50',
+  blue: 'border-sky-300 bg-sky-50',
+  amber: 'border-amber-300 bg-amber-50',
+  red: 'border-red-300 bg-red-50',
 };
 
-export function MetricCard({ title, value, unit, icon, caption, tone = 'neutral' }: MetricCardProps) {
+const iconWrappers = {
+  neutral: 'bg-white text-slate-600',
+  green: 'bg-white text-emerald-700',
+  blue: 'bg-white text-sky-700',
+  amber: 'bg-white text-amber-700',
+  red: 'bg-white text-red-700',
+};
+
+export function MetricCard({ title, value, unit, icon, caption, detail, tone = 'neutral' }: MetricCardProps) {
   return (
-    <section className={`rounded-md border p-4 shadow-sm ${tones[tone]}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase text-slate-500">{title}</p>
-          <p className="mt-2 text-2xl font-bold tracking-normal text-ink">
+    <section className={`rounded-2xl border-2 p-5 shadow-sm transition-all hover:shadow-md ${tones[tone]}`}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold text-slate-500">{title}</p>
+          <p className={`mt-2 text-xl font-bold tracking-tight sm:text-2xl ${tone === 'red' ? 'text-red-800' : tone === 'amber' ? 'text-amber-800' : tone === 'green' ? 'text-emerald-800' : 'text-ink'}`}>
             {value}
-            {unit ? <span className="ml-1 text-sm font-semibold text-slate-500">{unit}</span> : null}
+            {unit ? <span className="ml-1.5 text-sm font-semibold text-slate-500 sm:text-base">{unit}</span> : null}
           </p>
+          {detail ? <p className="mt-1 text-sm font-medium text-slate-600 sm:text-base">{detail}</p> : null}
         </div>
-        {icon ? <div className="rounded-md bg-white p-2 text-slate-700 shadow-sm">{icon}</div> : null}
+        {icon ? <div className={`shrink-0 rounded-xl p-3 shadow-sm ${iconWrappers[tone]}`}>{icon}</div> : null}
       </div>
-      {caption ? <p className="mt-3 text-xs text-slate-500">{caption}</p> : null}
+      {caption ? <p className="mt-3 text-sm text-slate-500">{caption}</p> : null}
     </section>
   );
 }
