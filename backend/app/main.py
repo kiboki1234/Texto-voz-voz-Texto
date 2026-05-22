@@ -14,7 +14,7 @@ from app.modules.alerts.routes import router as alerts_router
 from app.modules.exports.routes import router as exports_router
 from app.modules.stations.routes import router as stations_router
 from app.modules.telegram.routes import router as telegram_router
-from app.modules.telegram.service import TelegramNotifier, alert_fingerprint, format_gad_alert_message
+from app.modules.telegram.service import TelegramNotifier, format_gad_alert_message
 
 
 logger = logging.getLogger(__name__)
@@ -72,7 +72,6 @@ def create_app() -> FastAPI:
         if not notifier.is_configured or not notifier.has_default_chat:
             logger.warning("Telegram notifications enabled but token or chat_id is missing.")
             return
-        app.state.telegram_alert_fingerprint = None
         app.state.telegram_task = asyncio.create_task(_telegram_alert_loop(app))
 
     @app.on_event("shutdown")
@@ -95,19 +94,15 @@ app = create_app()
 async def _telegram_alert_loop(app: FastAPI) -> None:
     while True:
         try:
-            await asyncio.to_thread(_send_changed_alerts, app)
+            await asyncio.to_thread(_send_current_alert_report, app)
         except Exception:
             logger.exception("Telegram notification cycle failed.")
         await asyncio.sleep(max(60, settings.telegram_alert_interval_seconds))
 
 
-def _send_changed_alerts(app: FastAPI) -> None:
+def _send_current_alert_report(app: FastAPI) -> None:
     engine = AlertEngine()
     alerts = []
     for summary in app.state.repository.get_summaries():
         alerts.extend(alert.as_dict() for alert in engine.evaluate(summary))
-    fingerprint = alert_fingerprint(alerts)
-    if fingerprint == getattr(app.state, "telegram_alert_fingerprint", None):
-        return
-    app.state.telegram_alert_fingerprint = fingerprint
     TelegramNotifier(settings).send_message(format_gad_alert_message(alerts))

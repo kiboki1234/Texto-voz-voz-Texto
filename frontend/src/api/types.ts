@@ -113,8 +113,8 @@ export interface OmbrothermalResponse {
   months: {
     month: string;
     temperature_avg: number | null;
+    temperature_2x: number | null;
     precipitation: number | null;
-    precipitation_scaled: number | null;
     dry: boolean | null;
     temperature_days: number;
     rain_days: number;

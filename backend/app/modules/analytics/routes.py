@@ -122,14 +122,14 @@ def ombrothermal(
         values = buckets[month]
         t = round(sum(values["temp"]) / len(values["temp"]), 2) if values["temp"] else None
         p = round(sum(values["rain"]), 2) if values["rain"] else None
-        p_scaled = round(p / 2, 2) if p is not None else None
-        dry = p <= 2 * t if t is not None and p is not None else None
+        temperature_2x = round(2 * t, 2) if t is not None else None
+        dry = p <= temperature_2x if temperature_2x is not None and p is not None else None
         months.append(
             {
                 "month": month,
                 "temperature_avg": t,
+                "temperature_2x": temperature_2x,
                 "precipitation": p,
-                "precipitation_scaled": p_scaled,
                 "dry": dry,
                 "temperature_days": len(values["temp"]),
                 "rain_days": len(values["rain"]),
@@ -143,7 +143,7 @@ def ombrothermal(
         "from": from_date.date().isoformat(),
         "to": to_date.date().isoformat(),
         "months": months,
-        "rule": "Periodo seco si P <= 2T. Para visualizacion Gaussen se compara T contra P/2 en una misma escala.",
+        "rule": "Periodo seco si P <= 2T. La grafica compara precipitacion mensual P contra temperatura media duplicada 2T.",
     }
 
 

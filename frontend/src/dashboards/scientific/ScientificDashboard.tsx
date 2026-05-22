@@ -120,7 +120,7 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Ombrotermico Gaussen" subtitle={`${from} a ${to} · T vs P/2 en escala unica`}>
+        <ChartPanel title="Diagrama Ombrotermico (P vs 2T)" subtitle={`${from} a ${to} · Precipitacion mensual P vs temperatura duplicada 2T`}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -128,15 +128,30 @@ export function ScientificDashboard() {
               legend: { bottom: 0 },
               grid: { left: 44, right: 20, top: 24, bottom: 48 },
               xAxis: { type: 'category', data: ombro?.months.map((month) => month.month) ?? [] },
-              yAxis: { type: 'value', name: 'C / mm÷2' },
+              yAxis: { type: 'value', name: 'P mm / 2xTemp C' },
               series: [
-                { name: 'Temperatura media', type: 'line', data: ombro?.months.map((month) => month.temperature_avg) ?? [], color: '#c98320', symbolSize: 7 },
                 {
-                  name: 'Precipitacion P/2',
-                  type: 'bar',
+                  name: 'Precipitacion',
+                  type: 'line',
+                  smooth: false,
+                  symbol: 'circle',
+                  symbolSize: 7,
+                  color: '#4f8df7',
                   data: ombro?.months.map((month) => ({
-                    value: month.precipitation_scaled,
-                    itemStyle: { color: month.dry ? '#c98320' : '#137ea0' },
+                    value: month.precipitation,
+                    itemStyle: { color: month.dry ? '#c98320' : '#4f8df7' },
+                  })) ?? [],
+                },
+                {
+                  name: 'Temperatura (2T)',
+                  type: 'line',
+                  smooth: false,
+                  symbol: 'circle',
+                  symbolSize: 7,
+                  color: '#85dc8b',
+                  data: ombro?.months.map((month) => ({
+                    value: month.temperature_2x,
+                    itemStyle: { color: '#85dc8b' },
                   })) ?? [],
                 },
               ],
@@ -148,8 +163,8 @@ export function ScientificDashboard() {
                 <tr>
                   <th className="py-2">Mes</th>
                   <th>T media</th>
+                  <th>2T</th>
                   <th>P real</th>
-                  <th>P/2</th>
                   <th>Estado</th>
                 </tr>
               </thead>
@@ -158,8 +173,8 @@ export function ScientificDashboard() {
                   <tr key={month.month} className="border-b border-slate-100">
                     <td className="py-2 font-semibold">{month.month}</td>
                     <td>{formatNumber(month.temperature_avg)} C</td>
+                    <td>{formatNumber(month.temperature_2x)}</td>
                     <td>{formatNumber(month.precipitation)} mm</td>
-                    <td>{formatNumber(month.precipitation_scaled)}</td>
                     <td className={month.data_status === 'missing' ? 'text-slate-500' : month.dry ? 'text-amber-700' : 'text-emerald-700'}>
                       {month.data_status === 'missing' ? 'sin datos' : month.dry ? 'seco' : 'humedo'}
                     </td>
@@ -215,7 +230,7 @@ export function ScientificDashboard() {
             ))}
           </div>
         </ChartPanel>
-        <ChartPanel title="NPK suelo" subtitle="Bandas: deficiente, optimo, exceso">
+        <ChartPanel title="Estado Nutricional NPK del Suelo" subtitle="Nitrógeno, fósforo y potasio comparados contra rangos óptimos en mg/Kg">
           <NpkStatus data={npk} />
         </ChartPanel>
         <ChartPanel title="Rosa de vientos" subtitle={windRose?.method ?? 'Direccion por muestra, velocidad media por sector'}>
