@@ -2,6 +2,7 @@ import { AlertTriangle, Battery, Bot, ChevronDown, ChevronUp, CloudRain, Droplet
 import { useEffect, useState } from 'react';
 import { useNpk, useSprayWindow, useStations, useSummary } from '../../api/hooks';
 import { MetricCard } from '../../components/MetricCard';
+import { HuacaWarningModal } from '../../components/HuacaWarningModal';
 import { NpkStatus } from '../../components/NpkStatus';
 import { SprayWindowCard } from '../../components/SprayWindowCard';
 import { StationSelector } from '../../components/StationSelector';
@@ -112,6 +113,7 @@ export function FarmerDashboard() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
+      <HuacaWarningModal active={stationId === 101} context="agricultor" />
       <div className="flex items-center justify-between gap-4">
         <StationSelector stations={stations} value={stationId} onChange={setStationId} compact />
         <button

@@ -20,7 +20,7 @@ def npk(station_id: int, request: Request) -> dict:
     summary = _repository(request).get_summary(station_id)
     warning = None
     if station_id == 101:
-        warning = "HUACA reporta N/P/K con unidad no confiable (PARID=1); usar como referencia."
+        warning = "HUACA usa sensores de suelo con unidades distintas; los nutrientes se muestran solo como referencia."
     return {
         "station_id": station_id,
         "station_name": summary["station_name"],
@@ -48,16 +48,23 @@ def frost(
 ) -> dict:
     repo = _repository(request)
     temp_min = repo.get_series(station_id, "Temp_Min", from_date, to_date, "daily")["points"]
+    temp_avg = repo.get_series(station_id, "Temp_AVG", from_date, to_date, "daily")["points"]
     humidity = repo.get_series(station_id, "Humedad_AVG", from_date, to_date, "daily")["points"]
+    temp_avg_by_time = {point["time"][:10]: point["value"] for point in temp_avg}
     humidity_by_time = {point["time"][:10]: point["value"] for point in humidity}
     events = []
     for point in temp_min:
         day = point["time"][:10]
+        t_avg = temp_avg_by_time.get(day)
         h = humidity_by_time.get(day)
         classification = frost_classification(point["value"], h)
-        dew_point = dew_point_magnus(point["value"], h) if h is not None else None
-        events.append({"date": day, "temp_min": point["value"], "humidity_avg": h, "dew_point": dew_point, **classification})
-    return {"station_id": station_id, "events": events}
+        dew_point = dew_point_magnus(t_avg, h) if t_avg is not None and h is not None else None
+        events.append({"date": day, "temp_min": point["value"], "temp_avg": t_avg, "humidity_avg": h, "dew_point": dew_point, **classification})
+    return {
+        "station_id": station_id,
+        "method": "Riesgo con Temp_Min diaria y Humedad_AVG diaria. Punto de rocio estimado con Temp_AVG diaria y Humedad_AVG diaria (Magnus).",
+        "events": events,
+    }
 
 
 @router.get("/analytics/eto")
@@ -76,7 +83,10 @@ def eto(
     points = []
     for day, values in sorted(by_day.items()):
         eto_value = eto_hargreaves(values.get("temp_min"), values.get("temp_max"), values.get("temp_avg"))
-        points.append({"date": day, "eto": eto_value, "rainfall": values.get("rainfall")})
+        rainfall_value = values.get("rainfall")
+        water_balance = round(rainfall_value - eto_value, 2) if rainfall_value is not None and eto_value is not None else None
+        deficit = round(max(0.0, eto_value - rainfall_value), 2) if rainfall_value is not None and eto_value is not None else None
+        points.append({"date": day, "eto": eto_value, "rainfall": rainfall_value, "water_balance": water_balance, "deficit": deficit})
     return {
         "station_id": station_id,
         "method": "Hargreaves-Samani simplificado, Ra fija=15 por falta de latitud/altitud confirmada.",
@@ -108,10 +118,24 @@ def ombrothermal(
     for point in rain:
         buckets[point["time"][:7]]["rain"].append(float(point["value"]))
     months = []
-    for month, values in sorted(buckets.items()):
+    for month in _month_range(from_date, to_date):
+        values = buckets[month]
         t = round(sum(values["temp"]) / len(values["temp"]), 2) if values["temp"] else None
-        p = round(sum(values["rain"]), 2) if values["rain"] else 0
-        months.append({"month": month, "temperature_avg": t, "precipitation": p, "dry": bool(t is not None and p <= 2 * t)})
+        p = round(sum(values["rain"]), 2) if values["rain"] else None
+        p_scaled = round(p / 2, 2) if p is not None else None
+        dry = p <= 2 * t if t is not None and p is not None else None
+        months.append(
+            {
+                "month": month,
+                "temperature_avg": t,
+                "precipitation": p,
+                "precipitation_scaled": p_scaled,
+                "dry": dry,
+                "temperature_days": len(values["temp"]),
+                "rain_days": len(values["rain"]),
+                "data_status": "ok" if values["temp"] and values["rain"] else "missing",
+            }
+        )
     response_year = from_date.year if from_date.year == to_date.year else None
     return {
         "station_id": station_id,
@@ -119,7 +143,7 @@ def ombrothermal(
         "from": from_date.date().isoformat(),
         "to": to_date.date().isoformat(),
         "months": months,
-        "rule": "Periodo seco si P <= 2T.",
+        "rule": "Periodo seco si P <= 2T. Para visualizacion Gaussen se compara T contra P/2 en una misma escala.",
     }
 
 
@@ -131,14 +155,21 @@ def wind_rose(
     to_date: datetime = Query(..., alias="to"),
 ) -> dict:
     repo = _repository(request)
-    speed = repo.get_series(station_id, "VV_Sonic_AVG", from_date, to_date, "hourly")["points"]
-    direction = repo.get_series(station_id, "DV_Sonic_AVG", from_date, to_date, "hourly")["points"]
+    speed = repo.get_series(station_id, "VV_Sonic_AVG", from_date, to_date, "raw")["points"]
+    direction = repo.get_series(station_id, "DV_Sonic_AVG", from_date, to_date, "raw")["points"]
+    source = "sonic"
+    if not speed or not direction:
+        speed = repo.get_series(station_id, "VV_Mec_AVG", from_date, to_date, "raw")["points"]
+        direction = repo.get_series(station_id, "DV_Mec_AVG", from_date, to_date, "raw")["points"]
+        source = "mechanical"
     direction_by_time = {point["time"]: point["value"] for point in direction}
     sectors = {name: {"count": 0, "speed_sum": 0.0} for name in ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]}
+    total_samples = 0
     for point in speed:
         angle = direction_by_time.get(point["time"])
-        if angle is None:
+        if angle is None or point["value"] is None:
             continue
+        total_samples += 1
         sector = _sector(float(angle))
         sectors[sector]["count"] += 1
         sectors[sector]["speed_sum"] += float(point["value"])
@@ -150,7 +181,13 @@ def wind_rose(
         }
         for sector, data in sectors.items()
     ]
-    return {"station_id": station_id, "sectors": result}
+    return {
+        "station_id": station_id,
+        "source": source,
+        "total_samples": total_samples,
+        "method": "Sectorizacion por muestra cruda de direccion; velocidad media calculada dentro de cada sector. No se promedia direccion linealmente.",
+        "sectors": result,
+    }
 
 
 def _merge_points(series: dict[str, list[dict]]) -> dict[str, dict[str, float]]:
@@ -164,3 +201,16 @@ def _merge_points(series: dict[str, list[dict]]) -> dict[str, dict[str, float]]:
 def _sector(angle: float) -> str:
     sectors = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"]
     return sectors[int(((angle % 360) + 22.5) // 45) % 8]
+
+
+def _month_range(from_date: datetime, to_date: datetime) -> list[str]:
+    current = datetime(from_date.year, from_date.month, 1)
+    end = datetime(to_date.year, to_date.month, 1)
+    months = []
+    while current <= end:
+        months.append(current.strftime("%Y-%m"))
+        if current.month == 12:
+            current = datetime(current.year + 1, 1, 1)
+        else:
+            current = datetime(current.year, current.month + 1, 1)
+    return months

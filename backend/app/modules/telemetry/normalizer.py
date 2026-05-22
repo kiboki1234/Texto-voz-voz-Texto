@@ -113,7 +113,7 @@ class VariableNormalizer:
         station_id: int | None,
     ) -> str | None:
         if station_id == 101 and definition.standard_name in {"N", "P", "K"} and str(parameter_id) == "1":
-            return "HUACA reporta N/P/K con PARID=1; validar unidad antes de comparaciones agronomicas."
+            return "HUACA usa sensores de nutrientes con unidades distintas; validar antes de comparar con otras estaciones."
         if station_id == 101 and definition.standard_name.startswith("Hum_Hoja") and definition.standard_name != "Hum_Hoja":
             return "HUACA puede reportar solo HumHoja sin minimo/maximo."
         return None

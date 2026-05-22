@@ -166,7 +166,7 @@ class AlertEngine:
             nutrient = classify_nutrient(kind, summary.get(field))
             if nutrient["status"] == "deficient":
                 unit = "sin unidad" if station_id == 101 else "mg/Kg"
-                suffix = " Unidad de HUACA no confiable." if station_id == 101 else ""
+                suffix = " En HUACA este dato es referencial por diferencia de unidades." if station_id == 101 else ""
                 alerts.append(Alert(f"{station_id}-npk-{kind}", station_id, station_name, "warning", "npk", f"{kind} deficiente", f"{kind} por debajo del rango recomendado.{suffix}", summary.get(field), unit))
 
         return alerts

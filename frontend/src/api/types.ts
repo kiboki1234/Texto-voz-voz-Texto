@@ -110,17 +110,29 @@ export interface OmbrothermalResponse {
   from?: string;
   to?: string;
   rule?: string;
-  months: { month: string; temperature_avg: number | null; precipitation: number; dry: boolean }[];
+  months: {
+    month: string;
+    temperature_avg: number | null;
+    precipitation: number | null;
+    precipitation_scaled: number | null;
+    dry: boolean | null;
+    temperature_days: number;
+    rain_days: number;
+    data_status: 'ok' | 'missing';
+  }[];
 }
 
 export interface EtoResponse {
   station_id: number;
   method: string;
-  points: { date: string; eto: number | null; rainfall: number | null }[];
+  points: { date: string; eto: number | null; rainfall: number | null; water_balance?: number | null; deficit?: number | null }[];
 }
 
 export interface WindRoseResponse {
   station_id: number;
+  source?: string;
+  total_samples?: number;
+  method?: string;
   sectors: { sector: string; count: number; avg_speed: number }[];
 }
 
@@ -129,6 +141,7 @@ export interface FrostResponse {
   events: {
     date: string;
     temp_min: number | null;
+    temp_avg?: number | null;
     humidity_avg: number | null;
     dew_point: number | null;
     risk: 'unknown' | 'normal' | 'watch' | 'critical';

@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import { useEto, useFrost, useLatest, useNpk, useOmbrothermal, useSeries, useStations, useVariables, useWindRose } from '../../api/hooks';
 import { ChartPanel } from '../../components/ChartPanel';
 import { DateRangePicker } from '../../components/DateRangePicker';
+import { HuacaWarningModal } from '../../components/HuacaWarningModal';
 import { LoadingState } from '../../components/LoadingState';
 import { MetricCard } from '../../components/MetricCard';
 import { NpkStatus } from '../../components/NpkStatus';
@@ -35,12 +36,13 @@ export function ScientificDashboard() {
 
   return (
     <div className="space-y-6">
+      <HuacaWarningModal active={stationId === 101} context="cientifico" />
       <section className="flex flex-col gap-4 rounded-md border border-slate-200 bg-white p-4 shadow-panel lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-bold uppercase text-water">Dashboard cientifico</p>
           <h1 className="mt-1 text-2xl font-bold tracking-normal">Exploracion agrometeorologica</h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-600">
-            Variables normalizadas desde YDOC Insights. HUACA conserva advertencias por nomenclatura y unidad NPK.
+            Variables normalizadas desde YDOC Insights. HUACA conserva advertencias porque sus nutrientes usan unidades distintas.
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
@@ -125,7 +127,7 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Ombrotermico Gaussen" subtitle={`${from} a ${to} · Periodo seco si P <= 2T`}>
+        <ChartPanel title="Ombrotermico Gaussen" subtitle={`${from} a ${to} · T vs P/2 en escala unica`}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -133,16 +135,49 @@ export function ScientificDashboard() {
               legend: { bottom: 0 },
               grid: { left: 44, right: 20, top: 24, bottom: 48 },
               xAxis: { type: 'category', data: ombro?.months.map((month) => month.month) ?? [] },
-              yAxis: [{ type: 'value', name: 'T C' }, { type: 'value', name: 'P mm' }],
+              yAxis: { type: 'value', name: 'C / mm÷2' },
               series: [
-                { name: 'Temperatura', type: 'line', data: ombro?.months.map((month) => month.temperature_avg) ?? [], yAxisIndex: 0, color: '#c98320' },
-                { name: 'Precipitacion', type: 'bar', data: ombro?.months.map((month) => month.precipitation) ?? [], yAxisIndex: 1, color: '#137ea0' },
+                { name: 'Temperatura media', type: 'line', data: ombro?.months.map((month) => month.temperature_avg) ?? [], color: '#c98320', symbolSize: 7 },
+                {
+                  name: 'Precipitacion P/2',
+                  type: 'bar',
+                  data: ombro?.months.map((month) => ({
+                    value: month.precipitation_scaled,
+                    itemStyle: { color: month.dry ? '#c98320' : '#137ea0' },
+                  })) ?? [],
+                },
               ],
             }}
           />
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-xs">
+              <thead className="border-b border-slate-200 uppercase text-slate-500">
+                <tr>
+                  <th className="py-2">Mes</th>
+                  <th>T media</th>
+                  <th>P real</th>
+                  <th>P/2</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ombro?.months.map((month) => (
+                  <tr key={month.month} className="border-b border-slate-100">
+                    <td className="py-2 font-semibold">{month.month}</td>
+                    <td>{formatNumber(month.temperature_avg)} C</td>
+                    <td>{formatNumber(month.precipitation)} mm</td>
+                    <td>{formatNumber(month.precipitation_scaled)}</td>
+                    <td className={month.data_status === 'missing' ? 'text-slate-500' : month.dry ? 'text-amber-700' : 'text-emerald-700'}>
+                      {month.data_status === 'missing' ? 'sin datos' : month.dry ? 'seco' : 'humedo'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </ChartPanel>
 
-        <ChartPanel title="ET0 y lluvia" subtitle={eto?.method}>
+        <ChartPanel title="ET0, lluvia y deficit" subtitle={eto?.method}>
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -150,10 +185,11 @@ export function ScientificDashboard() {
               legend: { bottom: 0 },
               grid: { left: 44, right: 20, top: 24, bottom: 48 },
               xAxis: { type: 'category', data: eto?.points.map((point) => point.date.slice(5)) ?? [] },
-              yAxis: [{ type: 'value', name: 'ET0' }, { type: 'value', name: 'mm' }],
+              yAxis: { type: 'value', name: 'mm/dia' },
               series: [
                 { name: 'ET0', type: 'line', data: eto?.points.map((point) => point.eto) ?? [], color: '#1f7a5c' },
-                { name: 'Lluvia', type: 'bar', data: eto?.points.map((point) => point.rainfall) ?? [], yAxisIndex: 1, color: '#137ea0' },
+                { name: 'Lluvia', type: 'bar', data: eto?.points.map((point) => point.rainfall) ?? [], color: '#137ea0' },
+                { name: 'Deficit', type: 'line', data: eto?.points.map((point) => point.deficit) ?? [], color: '#b42318', lineStyle: { type: 'dashed' }, symbol: 'none' },
               ],
             }}
           />
@@ -161,7 +197,7 @@ export function ScientificDashboard() {
       </section>
 
       <section className="grid gap-6 lg:grid-cols-2">
-        <ChartPanel title="Heladas y punto de rocio" subtitle="Temp_Min + Humedad_AVG, clasificacion blanca/negra">
+        <ChartPanel title="Heladas y punto de rocio" subtitle="Riesgo con Temp_Min; punto de rocio Magnus con Temp_AVG + Humedad_AVG">
           <ReactECharts
             style={{ height: 300 }}
             option={{
@@ -189,7 +225,7 @@ export function ScientificDashboard() {
         <ChartPanel title="NPK suelo" subtitle="Bandas: deficiente, optimo, exceso">
           <NpkStatus data={npk} />
         </ChartPanel>
-        <ChartPanel title="Rosa de vientos" subtitle="DV_Sonic_AVG + VV_Sonic_AVG">
+        <ChartPanel title="Rosa de vientos" subtitle={windRose?.method ?? 'Direccion por muestra, velocidad media por sector'}>
           <ReactECharts
             style={{ height: 300 }}
             option={{

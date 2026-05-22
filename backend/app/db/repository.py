@@ -308,7 +308,7 @@ class AgroRepository:
     def _station_warnings(self, station_id: int) -> list[str]:
         if station_id == 101:
             return [
-                "HUACA usa nomenclatura antigua y N/P/K con PARID=1; los nutrientes se muestran como referencia tecnica."
+                "HUACA usa sensores con unidades distintas; los nutrientes se muestran solo como referencia y no deben compararse directamente con otras estaciones."
             ]
         return []
 
