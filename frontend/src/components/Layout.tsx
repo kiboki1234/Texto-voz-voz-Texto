@@ -13,8 +13,8 @@ export function Layout() {
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:justify-between">
           <NavLink to="/" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-md bg-canopy text-white">
-              <Activity size={22} />
+            <div className="flex h-10 w-10 overflow-hidden rounded-md border border-slate-200 shadow-sm">
+              <img src="/agrometria.jpeg" alt="Logo AgroMetrIA" className="h-full w-full object-cover" />
             </div>
             <div>
               <p className="text-lg font-bold leading-tight">AgroMetrIA</p>

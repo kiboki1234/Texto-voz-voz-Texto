@@ -1,0 +1,675 @@
+Plan Detallado De Desarrollo — AgroMetrIA
+Resumen
+Construir AgroMetrIA como una plataforma web agrometeorológica para el reto DevIAthon UPEC. La solución tendrá un backend FastAPI de solo lectura sobre SQL Server Insights y un frontend React + Vite con tres dashboards diferenciados: científico, GAD/institucional y agricultor.
+
+La prioridad técnica es convertir la base YDOC, que usa un modelo vertical tipo locations -> tags -> measurements/recentvalues, en datos claros para visualización, alertas y recomendaciones. La prioridad de producto es maximizar la rúbrica: UI/UX, ejecución técnica, IA/reglas agrometeorológicas, pitch y viabilidad.
+
+Stack decidido:
+
+Backend: Python 3.11+, FastAPI, Pydantic, pyodbc, SQLAlchemy Core opcional, pytest.
+Frontend: React + Vite + TypeScript, React Router, TanStack Query, Tailwind CSS, Apache ECharts.
+Datos: SQL Server clonado como fuente primaria de solo lectura.
+IA/Motor inteligente: reglas agrometeorológicas explicables, no modelo generativo para decisiones críticas.
+Deploy demo: local o Docker Compose. Producción futura: backend detrás de API, frontend estático.
+Arquitectura General
+agrometria/
+├── backend/
+│   ├── app/
+│   │   ├── main.py
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── modules/
+│   │   │   ├── stations/
+│   │   │   ├── telemetry/
+│   │   │   ├── analytics/
+│   │   │   ├── alerts/
+│   │   │   └── exports/
+│   │   └── tests/
+│   ├── requirements.txt
+│   └── .env.example
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── api/
+│   │   ├── dashboards/
+│   │   │   ├── scientific/
+│   │   │   ├── institutional/
+│   │   │   └── farmer/
+│   │   ├── components/
+│   │   └── lib/
+│   └── package.json
+├── docs/
+│   ├── auditoria_db.md
+│   ├── der.md
+│   ├── api-contract.md
+│   ├── pitch.md
+│   └── qa-checklist.md
+└── docker-compose.yml
+Decisiones obligatorias:
+
+No modificar la base YDOC.
+No crear relaciones físicas en SQL Server.
+No consultar measurements sin filtro de estación, variable y rango de fecha.
+Usar recentvalues para tiempo real.
+Usar measurements solo para históricos y agregados.
+Normalizar HUACA en backend porque su nomenclatura es distinta.
+Implementar umbrales propios porque los límites YDOC están en valores genéricos 0/100.
+Modelo De Datos Lógico
+Relaciones a documentar y usar:
+
+locations.LOCID -> tags.LOCID
+params.PARID -> tags.PARID
+tags.TAGID -> recentvalues.TAGID
+tags.TAGID -> measurements.TAGID
+locations.LOCID -> DigitalAssets.LOCID
+locations.LOCID -> comments.LOCID
+Tablas principales:
+
+locations: estaciones meteorológicas.
+tags: sensores/variables por estación.
+params: unidades físicas.
+recentvalues: última lectura por sensor.
+measurements: histórico completo.
+DigitalAssets: información RTU.
+comments: bitácora.
+Normalización de variables:
+
+AVGTA, MINTA, MAXTA: temperatura.
+AVGRH, MINRH, MAXRH: humedad relativa.
+PR: lluvia.
+AVGSR, MINSR, MAXSR: radiación solar.
+AVGWSS, MINWSS, MAXWSS: viento sónico.
+AVGWSM, MINWSM, MAXWSM: viento mecánico.
+AVGWDS, MINWDS, MAXWDS: dirección viento sónico.
+AVGWDM, MINWDM, MAXWDM: dirección viento mecánico.
+DC: batería.
+AVGHH, MINHH, MAXHH, HH: humedad de hoja.
+N, P, K: nutrientes del suelo.
+Caso HUACA:
+
+Tiene 27 tags, no 29.
+Usa nombres antiguos como AvgTemp, MinTemp, HumHoja, Voltaje.
+Su NPK usa PARID = 1, no PARID = 15.
+El backend debe mapear HUACA a nombres estándar y marcar advertencia técnica en científico.
+Backend FastAPI
+Estructura Interna
+Módulos:
+
+stations: estaciones, estado de red, metadatos.
+telemetry: lecturas actuales e históricas.
+analytics: ET₀, ombrotérmico, NPK, viento, helada.
+alerts: motor de reglas.
+exports: CSV.
+db: conexión SQL Server.
+core: configuración, errores, logging, CORS.
+Configuración .env:
+
+APP_NAME=AgroMetrIA
+APP_ENV=local
+MSSQL_HOST=10.100.100.45
+MSSQL_PORT=1433
+MSSQL_DATABASE=Insights
+MSSQL_USER=agro8
+MSSQL_PASSWORD=******
+CORS_ORIGINS=http://localhost:5173
+CACHE_TTL_SECONDS=60
+Contratos API
+Health
+GET /api/health
+Respuesta:
+
+{
+  "status": "ok",
+  "database": "reachable",
+  "version": "1.0.0"
+}
+Estaciones
+GET /api/stations
+Respuesta:
+
+[
+  {
+    "station_id": 101,
+    "name": "HUACA",
+    "code": "125720354",
+    "device_code": "125720354",
+    "rtu_info": "V5.0B5...",
+    "latest_time": "2026-05-19T12:00:00",
+    "data_status": "stale",
+    "tag_count": 27
+  }
+]
+Últimos Valores
+GET /api/stations/{station_id}/latest
+Respuesta:
+
+{
+  "station_id": 102,
+  "station_name": "CAYAMBE",
+  "latest_time": "2026-05-19T12:00:00",
+  "variables": [
+    {
+      "code": "AVGTA",
+      "standard_name": "Temp_AVG",
+      "display_name": "Temperatura promedio",
+      "category": "temperature",
+      "value": 19.58,
+      "unit": "C",
+      "quality": "ok"
+    }
+  ]
+}
+Serie Histórica
+GET /api/stations/{station_id}/series?variable=Temp_AVG&from=2026-05-01&to=2026-05-19&resolution=raw
+Parámetros:
+
+variable: nombre estándar.
+from: obligatorio.
+to: obligatorio.
+resolution: raw, hourly, daily.
+Respuesta:
+
+{
+  "station_id": 102,
+  "variable": "Temp_AVG",
+  "unit": "C",
+  "points": [
+    { "time": "2026-05-19T11:55:00", "value": 19.4 },
+    { "time": "2026-05-19T12:00:00", "value": 19.58 }
+  ]
+}
+Resumen Actual
+GET /api/stations/{station_id}/summary
+Incluye:
+
+temperatura actual/promedio
+humedad
+lluvia
+viento
+radiación solar
+batería
+NPK
+estado general
+alertas activas
+Alertas
+GET /api/alerts/current
+GET /api/stations/{station_id}/alerts
+Alertas mínimas:
+
+helada blanca
+helada negra
+viento fuerte
+lluvia intensa
+batería crítica
+riesgo de hongos por humedad de hoja
+no fumigar
+NPK deficiente
+Analítica
+GET /api/analytics/ombrothermal?station_id=102&year=2026
+GET /api/analytics/eto?station_id=102&from=2026-05-01&to=2026-05-19
+GET /api/analytics/frost?station_id=102&from=2026-05-01&to=2026-05-19
+GET /api/analytics/npk?station_id=102
+GET /api/analytics/spray-window?station_id=102
+GET /api/analytics/wind-rose?station_id=102&from=2026-05-01&to=2026-05-19
+Reglas Agrometeorológicas
+Helada:
+
+Riesgo: Temp_Min <= 2.
+Helada inminente: Temp_Min <= 0.
+Blanca: Temp_Min <= 2 y Humedad_AVG >= 70.
+Negra: Temp_Min <= 2 y Humedad_AVG < 70.
+Punto de rocío:
+
+Fórmula Magnus usando temperatura y humedad relativa.
+Mostrar en científico y GAD.
+Ventana de fumigación:
+
+Apta si:
+VV_Sonic_AVG < 3 m/s
+Lluvia == 0
+10 <= Temp_AVG <= 28
+Hum_Hoja_AVG < 70
+Si falla, devolver motivos concretos.
+NPK:
+
+Nitrógeno:
+deficiente < 20
+óptimo 20–40
+exceso > 40
+Fósforo:
+deficiente < 10
+óptimo 10–30
+exceso > 30
+Potasio:
+deficiente < 80
+óptimo 80–200
+exceso > 200
+HUACA: mostrar advertencia por unidad no confiable.
+ET₀:
+
+Usar Hargreaves-Samani en MVP.
+Requiere Temp_Min, Temp_Max, Temp_AVG.
+Si no hay radiación extraterrestre por latitud/altitud, usar versión simplificada y documentar limitación.
+Ombrotérmico:
+
+Agrupar por mes.
+Calcular:
+T = promedio mensual Temp_AVG
+P = suma mensual Lluvia
+período seco si P <= 2T.
+Batería:
+
+Si unidad real es 4V, umbral operativo: < 3.7V.
+Si se confirma sistema 12V, umbral: < 11.5V.
+Default MVP: usar umbral por rango observado; documentar la duda.
+Frontend React
+Rutas
+/              landing interna con selector de dashboard
+/cientifico    dashboard científico
+/gad           dashboard institucional
+/agricultor    dashboard móvil agricultor
+Componentes Compartidos
+StationSelector
+DateRangePicker
+MetricCard
+StatusBadge
+AlertBadge
+LoadingState
+ErrorState
+ChartContainer
+StationStatusGrid
+NpkStatus
+SprayWindowCard
+Dashboard Científico
+Objetivo: precisión, trazabilidad y exploración.
+
+Módulos:
+
+Estado de red:
+seis estaciones
+última lectura
+batería
+estado de datos
+Explorador de series:
+estación
+variable
+rango
+resolución
+ECharts con zoom
+export CSV
+Ombrotérmico:
+T mensual vs P mensual
+sombreado P <= 2T
+ET₀:
+ET₀ diaria vs lluvia
+déficit hídrico
+Heladas:
+Temp_Min
+punto de rocío
+Humedad_AVG
+eventos blanca/negra
+NPK:
+N/P/K con bandas
+advertencia HUACA
+Rosa de vientos:
+DV_Sonic_AVG
+VV_Sonic_AVG
+Criterio UI:
+
+Técnico, denso, legible.
+No simplificar nombres de variables.
+Mostrar unidades y metodología.
+Dashboard GAD / Institucional
+Objetivo: decisión territorial rápida.
+
+Módulos:
+
+Mapa/lista de estaciones:
+semáforo por estación
+estado normal/vigilancia/alerta
+Resumen climático:
+temperatura
+humedad
+lluvia
+viento
+radiación
+Índice hídrico mensual:
+seco/húmedo
+P vs 2T
+ET₀ mensual:
+déficit/superávit hídrico
+Panel de alertas:
+helada
+viento
+lluvia
+batería
+hongos
+NPK por zona:
+tabla por estación
+semáforo deficiente/óptimo/exceso
+Criterio UI:
+
+Institucional, claro, visual.
+Evitar tecnicismos largos.
+Priorización por colores y severidad.
+Dashboard Agricultor
+Objetivo: móvil primero, lenguaje simple.
+
+Módulos:
+
+Selector de estación:
+seis botones
+estado general
+Condiciones actuales:
+temperatura ahora
+¿llovió?
+viento
+humedad de hoja
+intensidad del sol
+Alerta de helada:
+normal, vigilancia, alerta
+mensaje directo
+¿Puedo fumigar hoy?
+sí/no
+motivos
+Salud del suelo:
+N/P/K en texto simple
+“su suelo necesita nitrógeno”
+Historial mensual:
+lluvia acumulada
+días secos
+días con riesgo de helada
+Criterio UI:
+
+Mobile-first.
+Texto corto.
+Sin nombres TAGCODE.
+Una acción recomendada por tarjeta.
+División Del Trabajo Para 5 Desarrolladores
+Desarrollador 1 — Backend Base / Datos
+Responsabilidad:
+
+Infraestructura FastAPI y acceso SQL Server.
+Tareas:
+
+Crear proyecto backend.
+Configurar .env.
+Implementar conexión pyodbc.
+Crear DatabaseClient.
+Crear queries base para:
+estaciones
+tags
+recentvalues
+measurements por rango
+Implementar endpoints:
+/api/health
+/api/stations
+/api/stations/{id}/latest
+/api/stations/{id}/series
+Agregar CORS.
+Agregar manejo de errores.
+Criterio de aceptación:
+
+Backend corre con uvicorn.
+/api/health valida conexión.
+/api/stations devuelve 6 estaciones, no el nodo raíz.
+/latest no consulta measurements.
+/series exige rango de fecha.
+Desarrollador 2 — ETL / Analítica / Alertas
+Responsabilidad:
+
+Normalización, cálculos y reglas inteligentes.
+Tareas:
+
+Crear diccionario de normalización de variables.
+Mapear HUACA a nombres estándar.
+Crear servicios:
+VariableNormalizer
+AlertEngine
+FrostService
+NpkService
+SprayWindowService
+EtoService
+OmbrothermalService
+Implementar endpoints:
+/api/alerts/current
+/api/analytics/npk
+/api/analytics/spray-window
+/api/analytics/frost
+/api/analytics/eto
+/api/analytics/ombrothermal
+/api/analytics/wind-rose
+Crear pruebas unitarias de reglas.
+Criterio de aceptación:
+
+HUACA se normaliza sin romper datos.
+NPK marca advertencia para HUACA.
+Fumigación devuelve is_suitable y lista de razones.
+Alertas son explicables, no caja negra.
+ET₀ documenta supuestos.
+Desarrollador 3 — Frontend Base / Científico
+Responsabilidad:
+
+App React, routing y dashboard científico.
+Tareas:
+
+Crear frontend con Vite React TS.
+Configurar Tailwind.
+Configurar React Router.
+Configurar TanStack Query.
+Crear layout general.
+Crear componentes de charts con ECharts.
+Implementar /cientifico.
+Implementar:
+estado de red
+explorador de series
+ombrotérmico
+ET₀
+heladas
+NPK
+rosa de vientos
+export CSV
+Criterio de aceptación:
+
+Científico permite seleccionar estación, variable y rango.
+Gráficas tienen zoom/pan.
+CSV descarga el rango actual.
+Se muestran unidades.
+Advertencias de calidad aparecen sin bloquear.
+Desarrollador 4 — GAD / Agricultor / UI UX
+Responsabilidad:
+
+Dashboards orientados a decisión y lenguaje simple.
+Tareas:
+
+Implementar /gad.
+Implementar /agricultor.
+Crear tarjetas semáforo.
+Crear panel de alertas.
+Crear SprayWindowCard.
+Crear NpkSimpleCard.
+Crear diseño responsive.
+Crear modo móvil para agricultor.
+Criterio de aceptación:
+
+GAD muestra estado de las 6 estaciones en una pantalla.
+Agricultor funciona bien en móvil.
+No aparecen códigos técnicos en agricultor.
+Las alertas tienen mensaje accionable.
+Fumigación muestra sí/no y motivo.
+Desarrollador 5 — Integración / QA / Documentación / Pitch
+Responsabilidad:
+
+Calidad, demo y entrega.
+Tareas:
+
+Mantener documentación:
+DER
+API contract
+decisiones técnicas
+limitaciones
+guía de ejecución
+Crear mocks JSON para demo sin SQL Server.
+Crear checklist QA.
+Validar rutas principales.
+Preparar pitch de 3 minutos.
+Preparar slides:
+problema
+auditoría DB
+DER
+arquitectura
+dashboards
+IA/reglas
+viabilidad
+Coordinar integración final.
+Criterio de aceptación:
+
+Demo puede correr con SQL Server o mocks.
+Pitch explica por qué recentvalues es clave.
+Documentación menciona limitaciones y no promete predicción no soportada.
+Hay capturas o video corto del flujo.
+Cronograma Recomendado
+Fase 1 — Base Técnica
+Objetivo: API viva + frontend navegable.
+
+Entregables:
+
+Backend FastAPI corriendo.
+Conexión SQL Server.
+Endpoints health, stations, latest, series.
+Frontend con rutas /cientifico, /gad, /agricultor.
+Layout inicial.
+Bloqueantes:
+
+Credenciales SQL Server.
+Driver ODBC instalado.
+Definición final de variables estándar.
+Fase 2 — Datos Normalizados
+Objetivo: transformar YDOC en contrato usable.
+
+Entregables:
+
+Normalizador HUACA.
+Categorías de variables.
+Series por variable estándar.
+Resumen por estación.
+Primeras tarjetas con datos reales.
+Bloqueantes:
+
+Validar nombres de tags.
+Confirmar comportamiento cuando estación no tiene variable.
+Fase 3 — Motor Inteligente
+Objetivo: reglas agrometeorológicas.
+
+Entregables:
+
+Alertas de helada.
+Ventana de fumigación.
+NPK.
+ET₀.
+Ombrotérmico.
+Alertas institucionales.
+Bloqueantes:
+
+Decidir umbral de batería según escala observada.
+Documentar limitaciones de ET₀.
+Fase 4 — Dashboards
+Objetivo: experiencia final por usuario.
+
+Entregables:
+
+Científico completo.
+GAD completo.
+Agricultor completo.
+Gráficas ECharts.
+Semáforos.
+Modo móvil.
+Bloqueantes:
+
+Performance de series largas.
+Ajustes visuales.
+Fase 5 — Demo Y Entrega
+Objetivo: entregar sin fallos.
+
+Entregables:
+
+README.
+DER.
+API contract.
+Pitch.
+Mocks.
+QA checklist.
+Demo final probada.
+Pruebas Y Escenarios
+Backend:
+
+GET /api/health con DB disponible.
+GET /api/health con DB caída.
+GET /api/stations devuelve 6 estaciones.
+GET /api/stations/{id}/latest devuelve variables normalizadas.
+GET /api/stations/{id}/series rechaza fechas faltantes.
+GET /api/stations/{id}/series no permite rangos excesivos sin agregación.
+NPK HUACA devuelve advertencia.
+Fumigación devuelve razones cuando no es apta.
+Helada blanca/negra se clasifica correctamente.
+Frontend:
+
+Cargar /cientifico.
+Cambiar estación y variable.
+Graficar serie.
+Exportar CSV.
+Cargar /gad.
+Ver alertas por estación.
+Cargar /agricultor en móvil.
+Ver recomendación de fumigación.
+Ver estado NPK simple.
+Manejar error de API con mensaje claro.
+Demo:
+
+Ejecutar con SQL Server real.
+Ejecutar con mocks si falla la red.
+Mostrar auditoría DB.
+Mostrar tres dashboards.
+Mostrar una alerta explicable.
+Mostrar que la base no se modifica.
+Riesgos Y Mitigaciones
+Riesgo: SQL Server no disponible durante demo.
+Mitigación: mocks JSON versionados y modo VITE_USE_MOCKS=true.
+
+Riesgo: consultas históricas lentas.
+Mitigación: exigir from/to, usar TAGID, agregar por hora/día para rangos largos.
+
+Riesgo: HUACA rompe comparaciones.
+Mitigación: normalizador obligatorio y advertencia visible.
+
+Riesgo: umbrales YDOC no sirven.
+Mitigación: motor de reglas propio documentado.
+
+Riesgo: ET₀ cuestionable por datos faltantes.
+Mitigación: usar Hargreaves-Samani simplificado y declarar supuestos.
+
+Riesgo: mapa sin coordenadas reales.
+Mitigación: usar lista geográfica/diagrama territorial si no hay lat/lon confiables.
+
+Criterios De Aceptación Final
+La solución se considera lista cuando:
+
+Hay tres dashboards navegables.
+El backend lee datos reales del clon.
+El DER está documentado.
+El dashboard científico muestra series históricas.
+El dashboard GAD muestra alertas institucionales.
+El dashboard agricultor responde “¿puedo fumigar hoy?”.
+NPK se muestra en GAD y agricultor.
+La app no modifica SQL Server.
+Existe fallback mock para demo.
+El pitch explica claramente el valor técnico y social.
+Supuestos Y Defaults
+Se trabajará sobre SQL Server clonado Insights.
+El acceso será de solo lectura.
+React + Vite reemplaza Astro por mayor ajuste a dashboards interactivos.
+Redis no se incluye en MVP; cache TTL en memoria basta para demo.
+No habrá autenticación en MVP público; si se requiere, se añade después.
+La IA será explicable mediante reglas agrometeorológicas, no LLM tomando decisiones.
+ET₀ será aproximada en MVP.
+Las reglas de fumigación y NPK son recomendativas, no prescripción agronómica definitiva.

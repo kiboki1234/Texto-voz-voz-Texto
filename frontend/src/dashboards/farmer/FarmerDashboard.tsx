@@ -7,6 +7,68 @@ import { NpkStatus } from '../../components/NpkStatus';
 import { StationSelector } from '../../components/StationSelector';
 import { formatNumber } from '../../lib/format';
 import { humanBattery, humanBatteryMessage, humanizeWarnings, humanLeafHumidity, humanRain, humanRainDetail, humanSun, humanTemp, humanWind } from '../../lib/humanizer';
+import type { Station } from '../../api/types';
+import type { ReactNode } from 'react';
+
+// --- COMPONENTES ESPECÍFICOS DEL AGRICULTOR (Bento UI Pro Max) ---
+
+function FarmerStationSelector({ stations = [], value, onChange }: { stations?: Station[]; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      {stations.map((station) => {
+        const isActive = value === station.station_id;
+        return (
+          <button
+            key={station.station_id}
+            className={`flex min-h-touch w-full items-center justify-center whitespace-normal break-words rounded-3xl border-4 px-3 py-4 text-lg font-bold leading-tight transition-all active:scale-[0.97] sm:text-xl ${
+              isActive
+                ? 'border-canopy bg-canopy text-white shadow-md'
+                : 'border-slate-300 bg-white text-slate-800 shadow-sm hover:border-canopy hover:bg-canopyLight active:border-canopy active:bg-canopyLight'
+            }`}
+            onClick={() => onChange(station.station_id)}
+          >
+            {station.name}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+const tones = {
+  neutral: 'border-slate-200 bg-white',
+  green: 'border-emerald-300 bg-emerald-50',
+  blue: 'border-sky-300 bg-sky-50',
+  amber: 'border-amber-300 bg-amber-50',
+  red: 'border-red-300 bg-red-50',
+};
+
+const iconWrappers = {
+  neutral: 'bg-white text-slate-600',
+  green: 'bg-white text-emerald-700',
+  blue: 'bg-white text-sky-700',
+  amber: 'bg-white text-amber-700',
+  red: 'bg-white text-red-700',
+};
+
+function FarmerMetricCard({ title, value, unit, icon, caption, detail, tone = 'neutral' }: any) {
+  return (
+    <section className={`rounded-3xl border-4 p-6 shadow-sm transition-all hover:shadow-md ${tones[tone as keyof typeof tones]}`}>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-bold uppercase tracking-wider text-slate-800 opacity-80">{title}</p>
+          <p className={`mt-1 text-2xl font-black tracking-tight sm:text-3xl ${tone === 'red' ? 'text-red-900' : tone === 'amber' ? 'text-amber-900' : tone === 'green' ? 'text-emerald-900' : 'text-slate-900'}`}>
+            {value}
+            {unit ? <span className="ml-1.5 text-lg font-bold text-slate-700 sm:text-xl">{unit}</span> : null}
+          </p>
+          {detail ? <p className="mt-2 text-base font-bold text-slate-800">{detail}</p> : null}
+        </div>
+        {icon ? <div className={`shrink-0 rounded-2xl p-4 shadow-inner border-2 border-black/5 ${iconWrappers[tone as keyof typeof iconWrappers]}`}>{icon}</div> : null}
+      </div>
+      {caption ? <p className="mt-3 text-base font-bold text-slate-700">{caption}</p> : null}
+    </section>
+  );
+}
 
 // --- LÓGICA DETERMINISTA (SIN IA) ---
 
@@ -54,13 +116,13 @@ const statusStyles: Record<string, { circle: string; label: string; bg: string; 
 
 function WeatherBox({ title, value, desc, Icon, colorClass }: { title: string; value: string; desc: string; Icon: any; colorClass: string }) {
   return (
-    <div className={`p-5 sm:p-6 rounded-3xl border-[4px] sm:border-[5px] ${colorClass} flex flex-col items-center text-center shadow-sm h-full w-full`}>
-      <Icon size={36} className="mb-3 opacity-80 shrink-0" />
-      <p className="text-base sm:text-lg font-black uppercase tracking-widest shrink-0">{title}</p>
-      <div className="flex-1 flex items-center justify-center w-full my-3">
-        <p className="text-xl sm:text-2xl font-black bg-white/70 px-3 py-2 rounded-2xl border-2 border-white/60 w-full break-words leading-tight">{value}</p>
+    <div className={`p-4 sm:p-5 rounded-2xl border-4 ${colorClass} flex flex-col items-center text-center shadow-sm h-full w-full`}>
+      <Icon size={32} className="mb-2 opacity-80 shrink-0" />
+      <p className="text-sm sm:text-base font-bold uppercase tracking-widest shrink-0">{title}</p>
+      <div className="flex-1 flex items-center justify-center w-full my-2">
+        <p className="text-lg sm:text-xl font-black bg-white/70 px-3 py-2 rounded-xl border border-white/60 w-full break-words leading-tight">{value}</p>
       </div>
-      <p className="text-base sm:text-lg font-bold opacity-90 leading-snug shrink-0">{desc}</p>
+      <p className="text-sm sm:text-base font-bold opacity-90 leading-snug shrink-0">{desc}</p>
     </div>
   );
 }
@@ -99,21 +161,21 @@ function WorkdayCard({ decision, summary }: { decision: Decision; summary: any }
   const rainInfo = getRainInfo(rain);
 
   return (
-    <div className={`overflow-hidden rounded-[2.5rem] border-[6px] ${style.border} ${style.bg} shadow-2xl transition-all`}>
-      <div className="flex flex-col md:flex-row items-center gap-10 p-10 md:p-14">
-        <div className={`flex h-40 w-40 shrink-0 items-center justify-center rounded-[2.5rem] ${style.circle} shadow-inner bg-white/60`}>
-          <Icon size={96} strokeWidth={2.5} />
+    <div className={`overflow-hidden rounded-3xl border-4 ${style.border} ${style.bg} shadow-md transition-all`}>
+      <div className="flex flex-col md:flex-row items-center gap-6 p-6 md:p-8">
+        <div className={`flex h-28 w-28 shrink-0 items-center justify-center rounded-[1.5rem] ${style.circle} shadow-inner bg-white/60`}>
+          <Icon size={64} strokeWidth={2.5} />
         </div>
         <div className="flex-1 text-center md:text-left w-full">
-          <h3 className="text-2xl font-black uppercase tracking-widest opacity-80 text-slate-800">Estado de la Jornada Laboral</h3>
-          <p className="mt-4 text-5xl md:text-6xl font-black tracking-tight text-slate-900">
+          <h3 className="text-lg font-bold uppercase tracking-widest opacity-80 text-slate-800">Estado de la Jornada Laboral</h3>
+          <p className="mt-2 text-4xl md:text-5xl font-black tracking-tight text-slate-900">
             Trabajo en campo: <span className={style.label}>{decision.accion}</span>
           </p>
-          <div className="mt-8 rounded-[2rem] bg-white/80 p-6 md:p-8 backdrop-blur-md border-4 border-white shadow-md">
-             <p className="text-2xl md:text-3xl font-bold leading-relaxed text-slate-900 mb-8 border-b-4 border-slate-200/60 pb-6">
+          <div className="mt-6 rounded-3xl bg-white/80 p-5 md:p-6 backdrop-blur-md border-2 border-white shadow-sm">
+             <p className="text-xl md:text-2xl font-bold leading-relaxed text-slate-900 mb-6 border-b-2 border-slate-200/60 pb-5">
                {decision.razon}
              </p>
-             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                <WeatherBox Icon={Sun} {...solInfo} />
                <WeatherBox Icon={Thermometer} {...tempInfo} />
                <WeatherBox Icon={CloudRain} {...rainInfo} />
@@ -130,12 +192,12 @@ function NutrientBox({ name, status, desc }: { name: string; status: string; des
   const label = status === 'deficient' ? 'Hace Falta' : status === 'excess' ? 'Demasiado' : 'Excelente';
   
   return (
-    <div className={`p-5 sm:p-6 rounded-3xl border-[4px] sm:border-[5px] ${bg} flex flex-col items-center text-center shadow-sm h-full w-full`}>
-      <p className="text-xl sm:text-2xl font-black shrink-0">{name}</p>
-      <p className="text-base sm:text-lg font-bold opacity-80 mt-1 shrink-0">{desc}</p>
-      <div className="flex-1 flex items-center justify-center w-full mt-4">
-        <div className="bg-white/70 px-3 py-2 rounded-2xl w-full border-2 border-white/60">
-           <p className="text-lg sm:text-xl font-black uppercase tracking-widest leading-tight">{label}</p>
+    <div className={`p-4 sm:p-5 rounded-2xl border-4 ${bg} flex flex-col items-center text-center shadow-sm h-full w-full`}>
+      <p className="text-lg sm:text-xl font-black shrink-0">{name}</p>
+      <p className="text-sm sm:text-base font-bold opacity-80 mt-1 shrink-0">{desc}</p>
+      <div className="flex-1 flex items-center justify-center w-full mt-3">
+        <div className="bg-white/70 px-3 py-2 rounded-xl w-full border border-white/60">
+           <p className="text-base sm:text-lg font-black uppercase tracking-widest leading-tight">{label}</p>
         </div>
       </div>
     </div>
@@ -158,55 +220,35 @@ function FertilizerAdviceCard({ npk }: { npk: any }) {
     if (status === 'excess') return <span className="text-purple-700 bg-purple-100 px-3 py-1 rounded-xl">Abundante</span>;
     return <span className="text-emerald-700 bg-emerald-100 px-3 py-1 rounded-xl">Está bien</span>;
   };
-
-  const faltan = [];
-  if (N === 'deficient') faltan.push('Nitrógeno (para el color verde y crecimiento de hojas)');
-  if (P === 'deficient') faltan.push('Fósforo (para el agarre y fuerza de las raíces)');
-  if (K === 'deficient') faltan.push('Potasio (para el tamaño y sabor de los frutos)');
-
   const sobran = [];
   if (N === 'excess') sobran.push('Nitrógeno');
   if (P === 'excess') sobran.push('Fósforo');
   if (K === 'excess') sobran.push('Potasio');
 
   return (
-    <div className="rounded-[2.5rem] border-[6px] border-blue-400 bg-blue-50 p-10 shadow-xl">
-      <h3 className="text-4xl font-black text-blue-900 flex items-center gap-4 mb-8">
-        <Leaf size={48} className="text-blue-600" /> Estado de la Tierra y Abonos
+    <div className="rounded-3xl border-2 border-blue-400 bg-blue-50 p-6 md:p-8 shadow-md">
+      <h3 className="text-xl md:text-2xl font-black text-blue-900 flex items-center gap-3 mb-6">
+        <Leaf size={28} className="text-blue-600" /> Estado de la Tierra y Abonos
       </h3>
 
-      {/* Resumen de Nutrientes Simplificado */}
-      <div className="mb-10 bg-white/70 p-6 md:p-8 rounded-[2rem] border-4 border-blue-200 shadow-inner">
-        <p className="text-xl md:text-2xl font-black text-blue-900 mb-6 uppercase tracking-widest border-b-4 border-blue-100 pb-4 text-center">Niveles de Nutrientes</p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+      <div className="mb-6 bg-white/70 p-5 md:p-6 rounded-3xl border border-blue-200 shadow-inner">
+        <p className="text-base md:text-lg font-bold text-blue-900 mb-5 uppercase tracking-widest border-b border-blue-100 pb-3 text-center">Niveles de Nutrientes</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
            <NutrientBox name="Nitrógeno" status={N || 'optimal'} desc="Para hojas verdes" />
            <NutrientBox name="Fósforo" status={P || 'optimal'} desc="Fuerza de la raíz" />
            <NutrientBox name="Potasio" status={K || 'optimal'} desc="Frutos grandes" />
         </div>
       </div>
       
-      {faltan.length > 0 && (
-        <div className="mb-8">
-          <p className="text-3xl font-black text-blue-900">Recomendación de compra:</p>
-          <p className="mt-2 text-2xl font-bold text-blue-800">A su tierra le hace falta:</p>
-          <ul className="mt-4 space-y-4">
-            {faltan.map(f => (
-              <li key={f} className="text-2xl font-bold text-blue-900 flex items-start gap-4">
-                <span className="text-blue-500 mt-1">▶</span> {f}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       {sobran.length > 0 && (
-        <div className="mt-8 p-8 bg-amber-100 rounded-[2rem] border-[6px] border-amber-300">
-           <p className="text-3xl font-black text-amber-900 flex items-center gap-3">
-             <AlertTriangle size={40} className="text-amber-700" /> Sugerencia Importante
+        <div className="mt-6 p-6 bg-amber-100 rounded-3xl border-2 border-amber-300">
+           <p className="text-lg font-black text-amber-900 flex items-center gap-2">
+             <AlertTriangle size={24} className="text-amber-700" /> Sugerencia Importante
            </p>
-           <p className="mt-5 text-2xl font-bold text-amber-800 leading-snug">
+           <p className="mt-3 text-base font-bold text-amber-800 leading-snug">
              Su tierra tiene nivel abundante de <strong>{sobran.join(' y ')}</strong>.<br/><br/>
-             No gaste dinero en abonos completos (como el típico 15-15-15 o 10-30-10). Pida en el almacén un abono específico que <strong>NO contenga lo que ya le sobra</strong>. Así ahorrará dinero y no maltratará la raíz de la planta.
+             No gaste dinero en abonos completos. Pida en el almacén un abono específico que <strong>NO contenga lo que ya le sobra</strong>.
            </p>
         </div>
       )}
@@ -222,17 +264,16 @@ function FrostAlertWidget({ summary }: { summary: any }) {
 
   if (temp == null || hum == null) return null;
 
-  // ESTADO SEGURO (Sin Helada)
   if (temp > 0) {
     return (
-      <div className="rounded-[2.5rem] border-[6px] border-emerald-400 bg-emerald-50 p-10 shadow-xl">
-        <div className="flex flex-col items-center text-center md:flex-row md:text-left md:items-start gap-8">
-          <div className="rounded-[2rem] bg-emerald-200 p-6 shadow-inner">
-            <CheckCircle size={80} className="text-emerald-700" />
+      <div className="rounded-3xl border-2 border-emerald-400 bg-emerald-50 p-6 md:p-8 shadow-md">
+        <div className="flex flex-col items-center text-center md:flex-row md:text-left md:items-start gap-6">
+          <div className="rounded-2xl bg-emerald-200 p-4 shadow-inner">
+            <CheckCircle size={48} className="text-emerald-700" />
           </div>
           <div className="flex-1">
-            <p className="text-5xl font-black text-emerald-900 tracking-tight">Sin riesgo de helada</p>
-            <p className="mt-4 text-3xl font-bold text-emerald-800 opacity-90">Las condiciones actuales son seguras para sus cultivos.</p>
+            <p className="text-2xl md:text-3xl font-black text-emerald-900 tracking-tight">Sin riesgo de helada</p>
+            <p className="mt-2 text-lg md:text-xl font-bold text-emerald-800 opacity-90">Las condiciones actuales son seguras para sus cultivos.</p>
           </div>
         </div>
       </div>
@@ -337,7 +378,7 @@ export function FarmerDashboard() {
   return (
     <div className="mx-auto max-w-5xl space-y-8">
       <HuacaWarningModal active={stationId === 101} context="agricultor" />
-      <StationSelector stations={stations} value={stationId} onChange={setStationId} compact />
+      <FarmerStationSelector stations={stations} value={stationId} onChange={setStationId} />
 
       <FrostAlertWidget summary={summary} />
 
@@ -368,14 +409,14 @@ export function FarmerDashboard() {
       )}
 
       {/* --- INFORMACIÓN SECUNDARIA (Detalles) --- */}
-      <div className="pt-8">
-        <h2 className="text-4xl font-black text-slate-900">Clima actual de la zona</h2>
-        <p className="mt-2 text-2xl font-bold text-slate-700">Resumen de los sensores</p>
-        <section className="mt-8 grid gap-6 sm:grid-cols-1 md:grid-cols-2">
-          <MetricCard title="Temperatura" value={temp} icon={<Thermometer size={40} />} tone="blue" />
-          <MetricCard title="Lluvia" value={rain} icon={<CloudRain size={40} />} tone={(summary?.rainfall ?? 0) > 0 ? 'amber' : 'green'} detail={humanRainDetail(summary?.rainfall)} />
-          <MetricCard title="Viento" value={wind} icon={<Wind size={40} />} tone={(summary?.wind_speed_avg ?? 0) >= 3 ? 'amber' : 'green'} />
-          <MetricCard title="Humedad de hoja" value={leaf} icon={<Droplets size={40} />} tone={(summary?.leaf_humidity_avg ?? 0) >= 70 ? 'amber' : 'green'} />
+      <div className="pt-6">
+        <h2 className="text-2xl sm:text-3xl font-black text-slate-900">Clima actual de la zona</h2>
+        <p className="mt-1 text-lg sm:text-xl font-bold text-slate-700">Resumen de los sensores</p>
+        <section className="mt-6 grid gap-4 sm:grid-cols-1 md:grid-cols-2">
+          <FarmerMetricCard title="Temperatura" value={temp} icon={<Thermometer size={40} />} tone="blue" />
+          <FarmerMetricCard title="Lluvia" value={rain} icon={<CloudRain size={40} />} tone={(summary?.rainfall ?? 0) > 0 ? 'amber' : 'green'} detail={humanRainDetail(summary?.rainfall)} />
+          <FarmerMetricCard title="Viento" value={wind} icon={<Wind size={40} />} tone={(summary?.wind_speed_avg ?? 0) >= 3 ? 'amber' : 'green'} />
+          <FarmerMetricCard title="Humedad de hoja" value={leaf} icon={<Droplets size={40} />} tone={(summary?.leaf_humidity_avg ?? 0) >= 70 ? 'amber' : 'green'} />
         </section>
       </div>
 
