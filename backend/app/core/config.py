@@ -49,10 +49,16 @@ class Settings:
     cors_origins: list[str] = None  # type: ignore[assignment]
     cache_ttl_seconds: int = int(os.getenv("CACHE_TTL_SECONDS", "60"))
 
+<<<<<<< HEAD
     telegram_bot_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     telegram_chat_id: str = os.getenv("TELEGRAM_CHAT_ID", "")
     telegram_notifications_enabled: bool = _bool_env("TELEGRAM_NOTIFICATIONS_ENABLED", False)
     telegram_alert_interval_seconds: int = int(os.getenv("TELEGRAM_ALERT_INTERVAL_SECONDS", "900"))
+=======
+    voicebox_url: str = os.getenv("VOICEBOX_URL", "http://127.0.0.1:17493")
+    voicebox_timeout: int = int(os.getenv("VOICEBOX_TIMEOUT", "120"))
+    voicebox_max_file_size: int = int(os.getenv("VOICEBOX_MAX_FILE_SIZE", "25"))
+>>>>>>> 6979b0c (servicio voces)
 
     def __post_init__(self) -> None:
         object.__setattr__(
