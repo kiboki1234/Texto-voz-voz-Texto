@@ -2,7 +2,7 @@ import { Activity, BarChart3, Building2, FlaskConical, Leaf } from 'lucide-react
 import { NavLink, Outlet } from 'react-router-dom';
 
 const navItems = [
-  { to: '/cientifico', label: 'Cientifico', icon: FlaskConical },
+  { to: '/cientifico', label: 'Científico', icon: FlaskConical },
   { to: '/gad', label: 'GAD', icon: Building2 },
   { to: '/agricultor', label: 'Agricultor', icon: Leaf },
 ];
@@ -18,7 +18,7 @@ export function Layout() {
             </div>
             <div>
               <p className="text-lg font-bold leading-tight">AgroMetrIA</p>
-              <p className="text-xs text-slate-500">Dashboard Meteorologico UPEC</p>
+              <p className="text-xs text-slate-500">Dashboard Meteorológico UPEC</p>
             </div>
           </NavLink>
           <nav className="flex gap-2 overflow-x-auto">
