@@ -18,7 +18,7 @@ export function ScientificDashboard() {
   const [variable, setVariable] = useState('Temp_AVG');
   const [from, setFrom] = useState(() => daysAgoInputValue(21));
   const [to, setTo] = useState(() => dateInputValue(new Date()));
-  const [resolution, setResolution] = useState('daily');
+  const resolution = 'daily';
 
   const { data: stations = [] } = useStations();
   const { data: variables = [] } = useVariables();
@@ -45,7 +45,7 @@ export function ScientificDashboard() {
             Variables normalizadas desde YDOC Insights. HUACA conserva advertencias porque sus nutrientes usan unidades distintas.
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <StationSelector stations={stations} value={stationId} onChange={setStationId} />
           <label>
             <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Variable</span>
@@ -57,21 +57,14 @@ export function ScientificDashboard() {
               ))}
             </select>
           </label>
-          <label>
-            <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Resolucion</span>
-            <select className="focus-ring w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold" value={resolution} onChange={(event) => setResolution(event.target.value)}>
-              <option value="raw">Raw</option>
-              <option value="hourly">Horaria</option>
-              <option value="daily">Diaria</option>
-            </select>
-          </label>
         </div>
       </section>
 
-      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
         <MetricCard title="Temperatura" value={formatNumber(latestMap.Temp_AVG?.value)} unit="C" icon={<Thermometer size={20} />} tone="blue" caption="Promedio actual" />
         <MetricCard title="Humedad" value={formatNumber(latestMap.Humedad_AVG?.value)} unit="%" icon={<Droplets size={20} />} tone="green" caption="Humedad relativa" />
         <MetricCard title="Lluvia" value={formatNumber(latestMap.Lluvia?.value)} unit="mm" icon={<Gauge size={20} />} tone="neutral" caption="Lectura reciente" />
+        <MetricCard title="Radiacion" value={formatNumber(latestMap.RadSol_AVG?.value, 0)} unit="W/m2" icon={<Sun size={20} />} tone="amber" caption="Radiacion solar promedio" />
         <MetricCard title="Bateria" value={formatNumber(latestMap.Bateria?.value, 2)} unit="V" icon={<Zap size={20} />} tone={(latestMap.Bateria?.value ?? 4) < 3.7 ? 'red' : 'amber'} caption={selectedStation ? formatDateTime(selectedStation.latest_time) : ''} />
       </section>
 
