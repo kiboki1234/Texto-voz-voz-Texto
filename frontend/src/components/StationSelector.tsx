@@ -10,27 +10,32 @@ interface StationSelectorProps {
 export function StationSelector({ stations = [], value, onChange, compact = false }: StationSelectorProps) {
   if (compact) {
     return (
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        {stations.map((station) => (
-          <button
-            key={station.station_id}
-            className={`focus-ring rounded-md border px-3 py-2 text-sm font-bold transition ${
-              value === station.station_id ? 'border-canopy bg-canopy text-white' : 'border-slate-200 bg-white text-slate-700'
-            }`}
-            onClick={() => onChange(station.station_id)}
-          >
-            {station.name}
-          </button>
-        ))}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {stations.map((station) => {
+          const isActive = value === station.station_id;
+          return (
+            <button
+              key={station.station_id}
+              className={`flex min-h-touch w-full items-center justify-center whitespace-normal break-words rounded-2xl border-2 px-2 py-3 text-base font-bold leading-tight transition active:scale-[0.97] sm:text-lg ${
+                isActive
+                  ? 'border-canopy bg-canopy text-white shadow-md'
+                  : 'border-slate-200 bg-white text-slate-700 shadow-sm active:border-canopy active:bg-canopyLight'
+              }`}
+              onClick={() => onChange(station.station_id)}
+            >
+              {station.name}
+            </button>
+          );
+        })}
       </div>
     );
   }
 
   return (
     <label className="block">
-      <span className="mb-1 block text-xs font-semibold uppercase text-slate-500">Estacion</span>
+      <span className="mb-2 block text-base font-bold text-slate-600">Elija su estación</span>
       <select
-        className="focus-ring w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold"
+        className="focus-ring min-h-touch w-full rounded-2xl border-2 border-slate-300 bg-white px-4 py-3 text-lg font-semibold"
         value={value}
         onChange={(event) => onChange(Number(event.target.value))}
       >
