@@ -20,7 +20,7 @@ class AgroRepository:
                 l.LOCCODE AS code,
                 l.DAQCODE AS device_code,
                 da.DESCRIPTION AS rtu_info,
-                MAX(rv.TIMEOFMEASUREMENT) AS latest_time,
+                mx.latest_time AS latest_time,
                 COUNT(DISTINCT t.TAGID) AS tag_count
             FROM dbo.locations l
             LEFT JOIN dbo.DigitalAssets da
@@ -28,10 +28,16 @@ class AgroRepository:
                AND da.ASSETNAME = 'RTUINFO'
             LEFT JOIN dbo.tags t
                 ON t.LOCID = l.LOCID
-            LEFT JOIN dbo.recentvalues rv
-                ON rv.TAGID = t.TAGID
+            LEFT JOIN (
+                SELECT
+                    tx.LOCID,
+                    MAX(m.TIMEOFMEASUREMENT) AS latest_time
+                FROM dbo.measurements m
+                JOIN dbo.tags tx ON tx.TAGID = m.TAGID
+                GROUP BY tx.LOCID
+            ) mx ON mx.LOCID = l.LOCID
             WHERE l.LOCID <> 2
-            GROUP BY l.LOCID, l.LOCNAME, l.LOCCODE, l.DAQCODE, da.DESCRIPTION
+            GROUP BY l.LOCID, l.LOCNAME, l.LOCCODE, l.DAQCODE, da.DESCRIPTION, mx.latest_time
             ORDER BY l.LOCID
         """
         rows = self.db.fetch_all(sql)
@@ -46,23 +52,41 @@ class AgroRepository:
             raise ValueError(f"Estacion {station_id} no existe.")
 
         sql = """
+            WITH latest AS (
+                SELECT TOP 1
+                    m.TIMEOFMEASUREMENT AS latest_time
+                FROM dbo.measurements m
+                JOIN dbo.tags tx ON tx.TAGID = m.TAGID
+                WHERE tx.LOCID = ?
+                GROUP BY m.TIMEOFMEASUREMENT
+                HAVING COUNT(DISTINCT tx.TAGID) = (
+                    SELECT COUNT(*) FROM dbo.tags WHERE LOCID = ?
+                )
+                ORDER BY m.TIMEOFMEASUREMENT DESC
+            )
             SELECT
-                rv.TIMEOFMEASUREMENT AS measured_at,
+                latest.latest_time AS snapshot_time,
+                m.TIMEOFMEASUREMENT AS measured_at,
                 t.TAGID AS tag_id,
                 t.TAGCODE AS variable_code,
                 t.TAGNAME AS variable_name,
                 t.PARID AS parameter_id,
-                rv.MEASUREDVALUE AS value,
+                m.MEASUREDVALUE AS value,
                 COALESCE(p.UNIT, p.DISPUNIT) AS unit
-            FROM dbo.recentvalues rv
-            JOIN dbo.tags t ON t.TAGID = rv.TAGID
+            FROM dbo.tags t
+            CROSS JOIN latest
+            LEFT JOIN dbo.measurements m
+                ON m.TAGID = t.TAGID
+               AND m.TIMEOFMEASUREMENT = latest.latest_time
             LEFT JOIN dbo.params p ON p.PARID = t.PARID
             WHERE t.LOCID = ?
             ORDER BY t.ORDERNR, t.TAGID
         """
-        rows = self.db.fetch_all(sql, [station_id])
+        rows = self.db.fetch_all(sql, [station_id, station_id, station_id])
+        if not rows:
+            raise ValueError(f"Estacion {station_id} no tiene mediciones historicas.")
         variables: list[dict[str, Any]] = []
-        latest_time: datetime | None = None
+        latest_measurement_time: datetime | None = None
         for row in rows:
             variable = self.normalizer.normalize(
                 code=row.get("variable_code"),
@@ -72,8 +96,8 @@ class AgroRepository:
                 station_id=station_id,
             )
             measured_at = row.get("measured_at")
-            if isinstance(measured_at, datetime) and (latest_time is None or measured_at > latest_time):
-                latest_time = measured_at
+            if isinstance(measured_at, datetime) and (latest_measurement_time is None or measured_at > latest_measurement_time):
+                latest_measurement_time = measured_at
             variables.append(
                 {
                     "code": row.get("variable_code"),
@@ -90,7 +114,7 @@ class AgroRepository:
         return {
             "station_id": station_id,
             "station_name": station["name"],
-            "latest_time": _iso(latest_time) or station.get("latest_time"),
+            "latest_time": _iso(latest_measurement_time or rows[0].get("snapshot_time")),
             "variables": variables,
             "warnings": self._station_warnings(station_id),
         }
@@ -204,6 +228,34 @@ class AgroRepository:
 
     def variable_options(self) -> list[dict[str, str]]:
         return self.normalizer.variable_options()
+
+    def _latest_measurement_time(self, station_id: int) -> datetime | None:
+        complete_snapshot = self.db.fetch_one(
+            """
+            SELECT TOP 1
+                m.TIMEOFMEASUREMENT AS latest_time
+            FROM dbo.measurements m
+            JOIN dbo.tags t ON t.TAGID = m.TAGID
+            WHERE t.LOCID = ?
+            GROUP BY m.TIMEOFMEASUREMENT
+            HAVING COUNT(DISTINCT t.TAGID) = (SELECT COUNT(*) FROM dbo.tags WHERE LOCID = ?)
+            ORDER BY m.TIMEOFMEASUREMENT DESC
+            """,
+            [station_id, station_id],
+        )
+        if complete_snapshot and complete_snapshot.get("latest_time"):
+            return complete_snapshot["latest_time"]
+
+        latest_any = self.db.fetch_one(
+            """
+            SELECT MAX(m.TIMEOFMEASUREMENT) AS latest_time
+            FROM dbo.measurements m
+            JOIN dbo.tags t ON t.TAGID = m.TAGID
+            WHERE t.LOCID = ?
+            """,
+            [station_id],
+        )
+        return latest_any["latest_time"] if latest_any else None
 
     def resolve_station_id(self, station: str) -> int:
         if station.isdigit():
